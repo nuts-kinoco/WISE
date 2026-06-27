@@ -1,81 +1,103 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using WISE.Domain.Entities;
-using WISE.Domain.Services;
+using WISE.Domain.Interfaces;
 using WISE.Infrastructure.Data;
 
-namespace WISE.Api.UseCases
+namespace WISE.Api.UseCases;
+
+public class ImportUseCase
 {
-    public class ImportUseCase
+    private readonly WiseDbContext _dbContext;
+    private readonly IIdentifierResolver _identifierResolver;
+
+    public ImportUseCase(WiseDbContext dbContext, IIdentifierResolver identifierResolver)
     {
-        private readonly WiseDbContext _dbContext;
+        _dbContext = dbContext;
+        _identifierResolver = identifierResolver;
+    }
 
-        public ImportUseCase(WiseDbContext dbContext)
+    public class AnalyzeResultDto
+    {
+        public string ScannedDirectory { get; set; } = string.Empty;
+        public int TotalFiles { get; set; }
+        public List<CandidateDto> Candidates { get; set; } = new();
+    }
+
+    public class CandidateDto
+    {
+        public string FilePath { get; set; } = string.Empty;
+        public string FileName { get; set; } = string.Empty;
+        public long FileSize { get; set; }
+        public string? ExtractedIdentifier { get; set; }
+        public bool IsExisting { get; set; }
+        public int Confidence { get; set; }
+        public List<EvidenceDto> Evidences { get; set; } = new();
+    }
+
+    public class EvidenceDto
+    {
+        public string Type { get; set; } = string.Empty;
+        public string Value { get; set; } = string.Empty;
+        public int Score { get; set; }
+        public string Provider { get; set; } = string.Empty;
+    }
+
+    public async Task<AnalyzeResultDto> AnalyzeDirectoryAsync(string directoryPath)
+    {
+        if (string.IsNullOrWhiteSpace(directoryPath) || !Directory.Exists(directoryPath))
+            throw new ArgumentException("Invalid or inaccessible directory path.");
+
+        var extensions = new[] { ".mp4", ".mkv", ".avi", ".zip", ".jpg", ".png" };
+        var files = Directory.GetFiles(directoryPath, "*.*", SearchOption.AllDirectories)
+            .Where(f => extensions.Contains(Path.GetExtension(f).ToLower()))
+            .ToList();
+
+        var candidates = new List<CandidateDto>();
+        var existingIdentifiers = await _dbContext.Works
+            .Select(w => w.PrimaryIdentifier)
+            .ToListAsync();
+        var existingSet = new HashSet<string>(
+            existingIdentifiers.Where(i => i != null).Cast<string>());
+
+        foreach (var file in files)
         {
-            _dbContext = dbContext;
-        }
+            var fileName = Path.GetFileName(file);
+            var fileInfo = new FileInfo(file);
 
-        public class AnalyzeResultDto
-        {
-            public string ScannedDirectory { get; set; } = string.Empty;
-            public int TotalFiles { get; set; }
-            public List<CandidateDto> Candidates { get; set; } = new();
-        }
+            // Import と同じ IdentifierResolver を使用
+            var tempAsset = new Asset(file, fileName, fileInfo.Length);
+            var identifierResult = await _identifierResolver.ResolveAsync(tempAsset);
 
-        public class CandidateDto
-        {
-            public string FilePath { get; set; } = string.Empty;
-            public string FileName { get; set; } = string.Empty;
-            public long FileSize { get; set; }
-            public string? ExtractedIdentifier { get; set; }
-            public bool IsExisting { get; set; }
-        }
+            var isUnknown = identifierResult.Decision == WISE.Domain.ValueObjects.Decision.Unknown;
 
-
-        public async Task<AnalyzeResultDto> AnalyzeDirectoryAsync(string directoryPath)
-        {
-            if (string.IsNullOrWhiteSpace(directoryPath) || !Directory.Exists(directoryPath))
-                throw new ArgumentException("Invalid or inaccessible directory path.");
-
-            var extensions = new[] { ".mp4", ".mkv", ".avi", ".zip", ".jpg", ".png" };
-            var files = Directory.GetFiles(directoryPath, "*.*", SearchOption.AllDirectories)
-                .Where(f => extensions.Contains(Path.GetExtension(f).ToLower()))
-                .ToList();
-
-            var candidates = new List<CandidateDto>();
-            var existingIdentifiers = await _dbContext.Works.Select(w => w.PrimaryIdentifier).ToListAsync();
-            var existingSet = new HashSet<string>(existingIdentifiers.Where(i => i != null).Cast<string>());
-
-            foreach (var file in files)
+            candidates.Add(new CandidateDto
             {
-                var fileName = Path.GetFileName(file);
-                var identifier = IdentifierParser.Parse(fileName);
-                var fileInfo = new FileInfo(file);
-
-                bool isUnknown = identifier.StartsWith("UNKNOWN-");
-
-                candidates.Add(new CandidateDto
+                FilePath = file,
+                FileName = fileName,
+                FileSize = fileInfo.Length,
+                ExtractedIdentifier = isUnknown ? null : identifierResult.ExtractedIdentifier,
+                IsExisting = !isUnknown && existingSet.Contains(identifierResult.ExtractedIdentifier),
+                Confidence = identifierResult.Confidence.Value,
+                Evidences = identifierResult.Evidences.Select(e => new EvidenceDto
                 {
-                    FilePath = file,
-                    FileName = fileName,
-                    FileSize = fileInfo.Length,
-                    ExtractedIdentifier = isUnknown ? null : identifier, // Hide UNKNOWN for UI preview
-                    IsExisting = !isUnknown && existingSet.Contains(identifier)
-                });
-            }
-
-            return new AnalyzeResultDto
-            {
-                ScannedDirectory = directoryPath,
-                TotalFiles = files.Count,
-                Candidates = candidates
-            };
+                    Type = e.Type,
+                    Value = e.Value,
+                    Score = e.Score.Value,
+                    Provider = e.ProviderId
+                }).ToList()
+            });
         }
 
-
+        return new AnalyzeResultDto
+        {
+            ScannedDirectory = directoryPath,
+            TotalFiles = files.Count,
+            Candidates = candidates
+        };
     }
 }

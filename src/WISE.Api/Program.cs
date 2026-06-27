@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using WISE.Domain.Interfaces;
+using WISE.Domain.Providers;
 using WISE.Domain.Services;
 using WISE.Infrastructure.Data;
 using WISE.Infrastructure.Services;
@@ -25,9 +26,14 @@ builder.Services.AddScoped<IMetadataProvider, JavBusMetadataProvider>();
 builder.Services.AddSingleton<WISE.Application.Services.IJobCancellationService, WISE.Application.Services.JobCancellationService>();
 builder.Services.AddHostedService<WISE.Api.Services.BackgroundJobWorker>();
 builder.Services.AddHostedService<WISE.Api.Services.WatchFolderMonitorService>();
-builder.Services.AddScoped<WISE.Api.UseCases.ExecuteImportJobUseCase>(); // Sprint 9: Synchronous execution
+builder.Services.AddScoped<WISE.Api.UseCases.ExecuteImportJobUseCase>();
 builder.Services.AddScoped<WISE.Api.UseCases.FetchMetadataJobUseCase>();
 builder.Services.AddSingleton<WISE.Domain.Interfaces.IOutputPathResolver, WISE.Infrastructure.Services.DefaultOutputPathResolver>();
+
+// Sprint 13: Evidence-Based Identifier Resolution Pipeline
+// IEvidenceProvider は複数登録可能。将来 PathEvidenceProvider / MetadataHintProvider を追加する場合はここに追記する。
+builder.Services.AddScoped<IEvidenceProvider, FileNameEvidenceProvider>();
+builder.Services.AddScoped<IIdentifierResolver, IdentifierResolver>();
 
 // Configure CORS
 builder.Services.AddCors(options =>

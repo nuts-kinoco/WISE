@@ -23,7 +23,7 @@ public class ProcessNewAssetUseCaseTests
         // Arrange
         var mockResolver = new Mock<IIdentifierResolver>();
         mockResolver.Setup(r => r.ResolveAsync(It.IsAny<Asset>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new IdentifierResult(Decision.New, new ConfidenceScore(50), null, new List<Evidence>()));
+            .ReturnsAsync(new IdentifierResult(Decision.New, new ConfidenceScore(50), null, new List<Evidence>(), "TEST-001"));
 
         var mockRepo = new Mock<IWorkRepository>();
         var mockUow = new Mock<IUnitOfWork>();
@@ -51,7 +51,7 @@ public class ProcessNewAssetUseCaseTests
         var existingWork = new Work();
         var mockResolver = new Mock<IIdentifierResolver>();
         mockResolver.Setup(r => r.ResolveAsync(It.IsAny<Asset>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new IdentifierResult(Decision.Existing, new ConfidenceScore(90), existingWorkId, new List<Evidence>()));
+            .ReturnsAsync(new IdentifierResult(Decision.Existing, new ConfidenceScore(90), existingWorkId, new List<Evidence>(), "TEST-001"));
 
         var mockRepo = new Mock<IWorkRepository>();
         mockRepo.Setup(r => r.GetByIdAsync(existingWorkId, It.IsAny<CancellationToken>()))
