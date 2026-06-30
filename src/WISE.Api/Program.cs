@@ -46,9 +46,13 @@ builder.Services.Configure<WISE.Domain.Models.MetadataProviderOptions>("LocalNfo
     builder.Configuration.GetSection("MetadataProviders:LocalNfo"));
 
 // Metadata providers — ConflictResolver が全Providerの結果をマージし、最高信頼度を primary とする
+// Tier0: ローカル（Priority=100, 即時・信頼性最高）
+builder.Services.AddScoped<IMetadataProvider, ComicInfoXmlMetadataProvider>(); // Priority=100（ComicInfo.xml内蔵）
 // Tier1: 公式・販売元（Priority≥70）
-builder.Services.AddScoped<IMetadataProvider, FanzaMetadataProvider>();  // Priority=80
-builder.Services.AddScoped<IMetadataProvider, MgsMetadataProvider>();     // Priority=70（Cookie要。年齢認証が通れば Fanza に次ぐ品質）
+builder.Services.AddScoped<IMetadataProvider, DLSiteMetadataProvider>();  // Priority=80（同人RJ/VJ/BJ）
+builder.Services.AddScoped<IMetadataProvider, FanzaMetadataProvider>();   // Priority=80
+builder.Services.AddScoped<IMetadataProvider, GetchuMetadataProvider>();  // Priority=70（同人/ゲーム）
+builder.Services.AddScoped<IMetadataProvider, MgsMetadataProvider>();     // Priority=70（Cookie要）
 builder.Services.AddScoped<IMetadataProvider, Fc2MetadataProvider>();     // Priority=60（FC2識別子専用）
 // Tier2: フォールバック補完（Priority<70）
 builder.Services.AddScoped<IMetadataProvider, Fc2AltMetadataProvider>(); // Priority=55（FC2削除済みコンテンツ）
