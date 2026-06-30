@@ -13,6 +13,9 @@ using WISE.Application.Services;
 using WISE.Api.UseCases;
 using WISE.Infrastructure.Cookies;
 using WISE.Infrastructure.Data;
+using WISE.Infrastructure.Cover;
+using WISE.Infrastructure.Viewers;
+using WISE.Infrastructure.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -90,6 +93,16 @@ builder.Services.AddScoped<IReadingHistoryRepository, WISE.Infrastructure.Data.R
 builder.Services.AddScoped<ICoverCacheRepository, WISE.Infrastructure.Data.Repositories.CoverCacheRepository>();
 builder.Services.AddScoped<IDisplayProfileRepository, WISE.Infrastructure.Data.Repositories.DisplayProfileRepository>();
 builder.Services.AddScoped<WISE.Domain.SeedWork.IUnitOfWork>(sp => sp.GetRequiredService<WiseDbContext>());
+
+// Cover providers (Chain of Responsibility)
+builder.Services.AddScoped<ICoverProviderChain, CoverProviderChain>();
+builder.Services.AddScoped<ICoverProvider, AssetCoverProvider>();
+builder.Services.AddScoped<ICoverProvider, VideoThumbnailCoverProvider>();
+builder.Services.AddScoped<ICoverProvider, DefaultCoverProvider>();
+builder.Services.AddScoped<FFmpegThumbnailService>();
+
+// Media viewers (Strategy per MediaType)
+builder.Services.AddScoped<IMediaViewer, VideoMediaViewer>();
 
 var app = builder.Build();
 
