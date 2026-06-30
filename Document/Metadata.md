@@ -1,46 +1,49 @@
-# WISE v2 Metadata.md (v1.0)
+# WISE v2 Metadata.md (v2.0)
 
-## 0. 本書の位置づけ
+> **本書はv1.0からv2.0への更新である。**  
+> 変更の主目的：SupportedMediaTypes追加（FB③と連携したProvider絞り込み）、Comic/Doujin固有フィールド定義（FB⑥関連）、ICoverProvider位置づけの明確化（FB④）、FTS5全文検索との連携（FB⑦）。
 
-本書は、メディアライブラリ管理アプリケーション「WISE v2」における **Metadata（メタデータ）** の定義、責務、競合解決、およびライフサイクルをまとめた設計書である。
-
-前提資料として **Architecture.md v1.1**、**Database.md v1.0**、**Work.md v1.0** を参照し、これらの既存設計と完全に整合する形で「作品情報」のドメインモデリングを行う。
-
-本書の最優先事項は **「Work（作品の同一性）」と「Metadata（作品の付帯情報）」の境界を明確にし、責務の混同を防ぐこと** である。
+前提資料：**Architecture.md v2.0**、**Domain.md v2.0**、**Database.md v2.0**
 
 ---
 
-## 1. Metadataとは
+# 1. Metadataとは
 
-### 役割と存在理由
-Metadataは **「Workを説明し、豊かにするための情報の集合」** である。
-WISEにおける「作品（Work）」は、識別子（ID）のみで成立する空の器（本棚の背表紙のようなもの）であり、Metadataはその器の中身（あらすじ、タイトル、著者名など）に相当する。
+## 役割と存在理由
 
-### 責務
-- 複数の外部情報源（Provider）から得られた情報を、Workに紐づく形で保持する。
-- 同一の属性（例：タイトル）に対する複数の候補値を管理し、優先度ルールに従って「システムとしての採用値」を決定する。
+Metadataは **「Workを説明し、豊かにするための情報の集合」** である。WISEにおける「作品（Work）」は、識別子（ID）のみで成立する空の器（本棚の背表紙のようなもの）であり、Metadataはその器の中身（タイトル、著者名、あらすじなど）に相当する。
 
-### ライフサイクル
+## 責務
+
+- 複数の外部情報源（Provider）から得られた情報を、Workに紐づく形で保持する
+- 同一の属性（例：タイトル）に対する複数の候補値を管理し、優先度ルールに従って「採用値」を決定する
+- FTS5全文検索インデックスの元データを提供する
+
+## ライフサイクル
+
 Workが誕生した時点では、Metadataは存在しなくてよい。Metadataは非同期のJobによって後から取得され、追加のProvider処理やユーザーの手動編集を通じて、**時間をかけて継続的に成長・洗練されていく**。
 
-### 概念の違い
-| 概念 | 存在意義 | 消滅条件 | 
+## 概念の境界
+
+| 概念 | 存在意義 | 消滅条件 |
 |---|---|---|
-| **Work** | 作品の「同一性」の証明。DBにおけるすべての起点。 | ユーザーが明示的に削除した場合のみ。 |
-| **Asset** | 実ファイル（物理データ）の表現。 | ファイルがディスクから失われ、かつシステムからパージされた場合。 |
-| **Metadata** | 作品を説明し、検索・分類を可能にする付加情報。 | Providerからの再取得で上書きされた場合、または手動で削除された場合。無くてもWorkは死なない。 |
+| **Work** | 作品の「同一性」の証明。DBにおけるすべての起点 | ユーザーが明示的に削除した場合のみ |
+| **Asset** | 実ファイル（物理データ）の表現 | ファイルが失われ、かつシステムからパージされた場合 |
+| **Metadata** | 作品を説明し、検索・分類を可能にする付加情報 | Providerからの再取得で上書き、または手動削除 |
+| **ReadingHistory** | ユーザーの閲覧/視聴進捗 | ユーザーが進捗リセット、またはWork削除連動 |
 
 ---
 
-## 2. Metadataモデル
+# 2. Metadataモデル
 
-Metadataを構成する要素を整理する。どこまでがMetadataであり、どこからがそうでないかの境界を明確にする。
+## 2.1 構成要素
 
 ```mermaid
 classDiagram
     class Work {
         +UUID id
         +String primaryIdentifier
+        +MediaType mediaType
     }
     class MetadataField {
         +UUID id
@@ -55,6 +58,7 @@ classDiagram
         +String name
         +String type
         +Int priority
+        +List~MediaType~ supportedMediaTypes
     }
     class Evidence {
         +UUID id
@@ -67,189 +71,292 @@ classDiagram
     Work "1" *-- "0..*" Evidence : supported by
 ```
 
-### Metadataに含まれる要素（例）
-これらは `METADATA_FIELD` テーブル内で `field_name` と `value` のペア（EAVモデル）として保持される。
-- **基本情報:** `Title` (作品名), `Series` (シリーズ), `Release Date` (発売日), `Runtime` (収録時間)
-- **人物・組織:** `Actress` / `Actor` (出演者), `Director` (監督), `Maker` (メーカー), `Label` (レーベル)
-- **分類:** `Genre` (ジャンル・カテゴリ)
-- **詳細情報:** `Description` (あらすじ・解説)
-- **メディア:** `Cover URL` (パッケージ画像URL), `Sample Image URLs` (サンプル画像URL群), `Preview Movie URL` (サンプル動画URL)
+## 2.2 フィールド定義（MediaType別）
 
-### Metadataに含まれない要素
-- **物理ファイル情報:** `FileSize`, `Duration (実ファイルの再生時間)`, `Resolution`, `Codec`, `SHA256` は **Asset** の責務。
-- **識別根拠:** 「なぜこのWorkと判定されたか」の証拠データは **Evidence** の責務。
-- **ユーザーによるグルーピング:** お気に入りやプレイリストへの所属は **Collection** の責務。
-- **ユーザー独自タグ:** Provider由来ではない、ユーザーが自由に付けたタグは **Tag / WorkTag** の責務。
+MetadataFieldのフィールド名は全MediaType共通の `METADATA_FIELD` テーブルに保存される。ただし実際に使用されるフィールドはMediaTypeによって異なる。
+
+### Video専用フィールド
+
+| field_name | 説明 | 例 |
+|---|---|---|
+| `actress` | 女優名（複数の場合は複数レコード） | `葵つかさ` |
+| `director` | 監督名 | `田中太郎` |
+| `maker` | メーカー名 | `ムーディーズ` |
+| `label` | レーベル名 | `MOODYZ IDEA` |
+| `duration` | 収録時間（秒数またはHH:MM表記） | `7200` |
+| `sample_movie_url` | サンプル動画URL | `https://...` |
+| `cover_landscape_url` | 横向きカバー画像URL | `https://...` |
+| `sample_image_urls` | サンプル画像URL群（JSON配列） | `["url1","url2"]` |
+
+### Comic / Doujin専用フィールド
+
+| field_name | 説明 | 例 |
+|---|---|---|
+| `author` | 作者名（複数の場合は複数レコード） | `田中花子` |
+| `circle` | サークル名 | `幻想工房` |
+| `page_count` | 総ページ数 | `48` |
+| `language` | 言語 | `Japanese` / `English` |
+| `volume` | 巻数 | `3` |
+| `chapter` | 話数 | `12` |
+| `event` | 発表イベント | `コミックマーケット103` |
+| `dlsite_id` | DLサイトRJ番号 | `RJ123456` |
+| `getchu_id` | Getchu作品ID | `123456` |
+| `has_full_color` | フルカラーフラグ | `true` |
+
+### Book専用フィールド
+
+| field_name | 説明 | 例 |
+|---|---|---|
+| `author` | 著者名 | `山田太郎` |
+| `publisher` | 出版社 | `集英社` |
+| `isbn` | ISBN | `978-4-08-...` |
+| `page_count` | ページ数 | `320` |
+| `language` | 言語 | `Japanese` |
+
+### 全MediaType共通フィールド
+
+| field_name | 説明 | 例 |
+|---|---|---|
+| `title` | 作品タイトル | `進撃の巨人` |
+| `release_date` | 発売日（YYYY-MM-DD） | `2024-01-15` |
+| `genre` | ジャンル（複数の場合は複数レコード） | `アクション` |
+| `description` | あらすじ/説明 | `人類は...` |
+| `series` | シリーズ名 | `ABCシリーズ` |
+| `cover_url` | カバー画像URL（縦向き） | `https://...` |
+| `rating` | 評価スコア（サイト評価） | `4.5` |
+| `tags` | タグ一覧（JSON配列） | `["tag1","tag2"]` |
+
+## 2.3 Metadataに含まれない要素
+
+- **物理ファイル情報：** `FileSize`, `Duration（実ファイルの再生時間）`, `SHA256` → **Asset** の責務
+- **識別根拠：** 「なぜこのWorkと判定されたか」のEvidence → **Evidence** の責務
+- **ユーザーグルーピング：** お気に入り・プレイリスト → **Collection** の責務
+- **ユーザー独自タグ：** Provider由来でないタグ → **Tag / WorkTag** の責務
+- **読書進捗：** ページ位置・再生位置 → **ReadingHistory** の責務
+- **カバー画像（キャッシュ済み）：** ICoverProviderで取得したローカルキャッシュ → **CoverCache** の責務
 
 ---
 
-## 3. Metadata Lifecycle
+# 3. Provider と SupportedMediaTypes
 
-Metadataは一度取得して終わりではなく、常に更新や競合解決が行われる。
+## 3.1 Providerの役割
+
+Metadataは必ず「どこから取得したか（Provider）」の情報を持つ。v2では各Providerが対応するMediaTypeを `SupportedMediaTypes` として宣言する。
+
+```csharp
+interface IMetadataProvider
+{
+    string Name { get; }
+    int Priority { get; }
+    IReadOnlyList<MediaType> SupportedMediaTypes { get; }  // v2追加
+    Task<IReadOnlyList<MetadataCandidate>> FetchAsync(Work work, CancellationToken ct);
+}
+```
+
+## 3.2 Provider一覧（v2更新）
+
+| Provider | SupportedMediaTypes | Priority | 概要 |
+|---|---|---|---|
+| `Manual` | All | 100 | ユーザー手動編集（最優先、絶対上書き不可） |
+| `FANZA` | Video | 80 | FANZA AV専用スクレイパー |
+| `JavBus` | Video | 70 | JavBus AV情報 |
+| `FC2` | Video | 70 | FC2 PPV情報 |
+| `AvWiki` | Video | 50 | AV女優Wiki |
+| `DLSite` | Comic, Book, PhotoBook, Audio | 80 | 同人誌・電子書籍 |
+| `Getchu` | Comic, Book | 70 | 美少女ゲーム/同人誌 |
+| `Melonbooks` | Comic, Book | 60 | 同人誌通販 |
+| `NDL` | Book | 70 | 国立国会図書館（書籍ISBN） |
+| `LocalNFO` | All | 40 | ローカルのNFOファイル |
+| `ComicInfoXml` | Comic, Book | 45 | ComicInfo.xml（Kavita互換） |
+| `FolderParser` | All | 20 | フォルダ名・ファイル名からの推測 |
+
+## 3.3 ProviderManagerのMediaType絞り込み
+
+```csharp
+// WorkのMediaTypeに対応するProviderのみを選択
+var applicableProviders = _allProviders
+    .Where(p => p.SupportedMediaTypes.Contains(work.MediaType))
+    .Where(p => p.IsEnabled)
+    .OrderByDescending(p => p.Priority);
+```
+
+これにより、ComicのWorkにFANZAが呼び出されることを防ぐ。
+
+---
+
+# 4. ICoverProviderとMetadataの関係
+
+## 4.1 カバー画像のMetadataフィールド
+
+`cover_url`（縦向き）と `cover_landscape_url`（横向き）はMetadataFieldとして保持される。これはProviderがスクレイピングで取得したリモートURLである。
+
+ICoverProvider の `MetadataCoverProvider` はこのMetadataFieldを参照し、URLをダウンロードしてCoverCacheにキャッシュする。
+
+## 4.2 カバー抽出の優先順位
+
+```
+MetadataField.cover_url が存在し、URLが有効
+    → MetadataCoverProvider が使用（Priority: 100）
+
+MetadataField.cover_url が存在しない、または404
+    → ArchiveCoverProvider / VideoThumbnailProvider / PdfCoverProvider のいずれかが使用
+    → CoverCache に生成済みキャッシュを保存
+```
+
+Metadataが充実している（= cover_urlが取得できている）ほどカバー品質が高い。これがMetadata取得を優先する設計の動機の一つである。
+
+---
+
+# 5. Metadata Lifecycle
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Pending : Work生成 (Metadataなし)
-    
+    [*] --> Pending : Work生成（Metadataなし）
+
     Pending --> Fetching : MetadataFetchJob 開始
     Fetching --> ConflictResolution : 複数Providerからデータ取得完了
-    
-    ConflictResolution --> PrimaryElected : 優先順位計算・採用値(isPrimary)決定
-    PrimaryElected --> GalleryVisible : ギャラリー・検索へ反映
-    
+
+    ConflictResolution --> PrimaryElected : 優先順位計算・採用値（isPrimary）決定
+    PrimaryElected --> Indexed : IndexUpdateJob → FTS5更新
+    Indexed --> GalleryVisible : Gallery・検索へ反映
+
     GalleryVisible --> Fetching : ユーザーによる再取得要求 / 新規Provider追加
-    GalleryVisible --> ManualEdited : ユーザーによる手動編集 (最優先スコア付与)
-    
-    ManualEdited --> GalleryVisible : 手動編集反映 (他Providerデータをオーバーライド)
+    GalleryVisible --> ManualEdited : ユーザーによる手動編集（最優先スコア付与）
+
+    ManualEdited --> Indexed : 手動編集反映（他Providerデータをオーバーライド）
 ```
 
 ---
 
-## 4. Providerとの関係
+# 6. Metadata Conflict（競合解決）
 
-Metadataは必ず「どこから取得したか（Provider）」の情報を持つ。
+複数Providerから異なるデータが提供された場合の採用値（`is_primary = true`）決定アルゴリズム。
 
-```mermaid
-flowchart LR
-    P_FANZA[Provider: FANZA<br>Priority: 80]
-    P_MGS[Provider: MGS<br>Priority: 70]
-    P_WIKI[Provider: Wiki<br>Priority: 50]
-    P_LOCAL[Provider: LocalNFO<br>Priority: 40]
-    P_MANUAL[Provider: Manual<br>Priority: 100]
+## 6.1 優先順位決定ロジック
 
-    W[(Work)]
+各 `MetadataField` の評価スコアは以下のように計算される：
 
-    P_FANZA -- "Actress: A" --> W
-    P_MGS -- "Actress: A, B" --> W
-    P_WIKI -- "Actress: A" --> W
-    P_LOCAL -- "Title: My Video" --> W
-    P_MANUAL -- "Title: Correct Title" --> W
+1. **基本優先度（Provider Priority）：** `PROVIDER.priority` の値（0〜100）
+2. **手動編集の絶対優先（Manual Override）：** Manualは常にPriority=100、他のProviderがいかに高Priorityでも上書き不可
+3. **データ品質加点（Data Quality Bonus）：** 同一優先度の場合、データのリッチさで判断（あらすじの文字数、画像URL品質等）
+4. **取得日時（Freshness）：** 上記すべてが同点の場合、より新しい `fetched_at` を採用
 
-    style P_MANUAL fill:#ffcccc,stroke:#ff0000,stroke-width:2px
-```
+## 6.2 採用値の振る舞い
 
-### 複数Providerデータの扱い
-- 同一の `field_name` に対して、異なるProviderから情報が届いた場合、古いものを上書きするのではなく、**全Providerの候補値をDB（METADATA_FIELD）に保持する**。
-- その上で、アプリケーション層のロジックで「どれを採用値（`is_primary = true`）とするか」を決定する。これにより、あるProviderが急に利用不可になっても、過去の他Providerのデータへフォールバックできる。
+- 採用値に選ばれたレコードの `is_primary = true` となり、GalleryおよびFTS5インデックス化の対象となる
+- 選ばれなかったレコードは `is_primary = false` として休眠状態で保持（Providerが無効化された時のフォールバック用）
 
 ---
 
-## 5. Metadata Conflict (競合解決)
+# 7. Metadata Quality（品質評価）
 
-複数Providerから異なるデータが提供された場合の、採用値（`is_primary = true`）の決定アルゴリズムを設計する。
+## 7.1 品質評価の指標
 
-### 優先順位決定ロジック
-各 `MetadataField` の評価スコアは以下のように計算される。
+| 指標 | 説明 |
+|---|---|
+| **Fill Rate（網羅率）** | MediaTypeの主要フィールドのうち値が存在する割合 |
+| **Confidence（信頼度）** | 採用Metadataが高PriorityのProviderから来ているかの平均 |
+| **Freshness（鮮度）** | 最終取得日時からの経過時間 |
+| **Cover Quality** | カバー画像の取得元（MetadataCoverProvider > ArchiveCoverProvider > Placeholder） |
 
-1. **基本優先度 (Provider Priority):** 
-   - DBの `PROVIDER.priority` の値（0〜100）。信頼できるProviderほど高く設定される。
-2. **手動編集の絶対優先 (Manual Override):** 
-   - ユーザーがUIから手動で編集・追加した値は、システム定義の `Manual` Provider由来として記録され、Priorityは常にMAX（例：100）として扱われる。これにより、スクレイピング結果がユーザーの意図を上書きすることを防ぐ。
-3. **データ品質加点 (Data Quality Bonus):**
-   - 同一優先度の場合、データの「リッチさ」で判断する。（例：あらすじの文字数が多い方、画像URLの解像度が高いと推測される方）。
-4. **取得日時 (Freshness):**
-   - 上記すべてが同点の場合、より新しい `fetched_at` を持つデータを採用する。
+## 7.2 MediaType別「主要フィールド」定義
 
-### 採用値の振る舞い
-- 採用値に選ばれたレコードの `is_primary` が `true` となり、Galleryの表示やSearch Engineのインデックス化対象となる。
-- 選ばれなかったレコードは `is_primary = false` として休眠状態で保持される。
+isCompleteの判定に使用される主要フィールド：
 
----
+| MediaType | 必須フィールド | 推奨フィールド |
+|---|---|---|
+| Video | title, cover_url, actress | maker, release_date, genre |
+| Comic | title, cover_url, author or circle | page_count, genre, release_date |
+| Book | title, cover_url, author | publisher, isbn, page_count |
 
-## 6. Metadata Quality (品質評価)
-
-Workが持つMetadata全体の「品質（充実度）」を評価し、ライブラリ管理に役立てる。
-
-### 品質評価の指標
-- **Fill Rate (網羅率):** 主要なフィールド（Title, Actress, Cover, Release Date）のうち、値が存在する割合。
-- **Confidence (信頼度):** 採用されたMetadataが、どの程度高いPriorityのProviderから来ているかの平均値。
-- **Freshness (鮮度):** 最終取得日時からの経過時間。
-
-これらの品質スコアが一定以下のWorkは、「要再取得リスト」や「情報不足リスト」としてUI（Diagnostic画面やスマートフォルダ）でフィルタリング可能にする。
+これらの品質指標が一定以下のWorkは、「要再取得リスト」や「情報不足リスト」としてSmartFolderでフィルタリング可能にする。
 
 ---
 
-## 7. Metadataと検索
+# 8. MetadataとFTS5全文検索
 
-Metadataは、各システムコンポーネントで以下のように利用される。
+## 8.1 検索の設計原則（FB⑦）
+
+FTS5全文検索は **MediaTypeに依存しない**。
+
+- `is_primary = true` の全MetadataFieldを検索対象とする
+- 「VideoだけのFTSと、ComicだけのFTSを分けない」
+- ユーザーが検索した場合、Video・Comic・Bookを横断した結果が返る
+- 結果をMediaTypeでフィルタリングするのはUIの責務（検索インデックスの責務ではない）
+
+## 8.2 IndexUpdateJobのトリガー
+
+| イベント | アクション |
+|---|---|
+| `MetadataUpdated`（Providerによる更新） | IndexUpdateJobをキューに投入 |
+| `MetadataUpdated`（Manual手動編集） | IndexUpdateJobを高優先度でキューに投入 |
+| Work Merge | 統合後の全MetadataFieldを再インデックス |
+| Work Soft Delete | FTS5から削除（コンテンツテーブルモードで自動） |
+
+---
+
+# 9. Metadataの利用先
 
 | コンポーネント | 利用方法 |
 |---|---|
-| **Gallery (UI)** | `is_primary = true` のMetadataを利用し、サムネイル、タイトル、女優名などのカード情報を描画する。 |
-| **Search Engine** | `is_primary = true` の値を抽出し、高速検索用のインデックス（転置インデックスなど）を構築する。ユーザーのキーワード検索にヒットさせる。 |
-| **Collection** | スマートフォルダの `rule_definition`（例：「発売日が2023年以降」かつ「ジャンルに"VR"を含む」）を評価するための元データとなる。 |
-| **Rule Engine** | リネームルールやフォルダ移動ルールの変数（例：`{Maker}/{Actress}/{Title}.mp4`）に展開・置換される。 |
-| **AI (将来拡張)** | 説明文（Description）をAIに読み込ませ、より高度なベクトル検索や、関連作品のレコメンド生成に利用する。 |
+| **Gallery（UI）** | `is_primary = true` のMetadataを利用。表示フィールドはMediaDisplayProfileが制御 |
+| **FTS5 Search** | `is_primary = true` の値をIndexUpdateJobが更新。MediaType横断検索 |
+| **ICoverProvider** | `MetadataCoverProvider` が `cover_url` / `cover_landscape_url` を参照 |
+| **Collection（SmartFolder）** | `rule_definition` の条件評価に使用（例：genre='百合' AND release_date >= '2024'） |
+| **Rule Engine** | リネームルールの変数展開（例：`{circle}/{title}.zip`） |
+| **IMediaViewer** | Work.MediaTypeをもとにViewerRouterが適切なViewerを選択 |
 
 ---
 
-## 8. Metadata更新のライフサイクル
+# 10. Metadata更新のライフサイクル
 
 ```mermaid
 sequenceDiagram
     participant User
     participant App as Application
-    participant MS as Metadata Service
-    participant Prov as Providers
+    participant MS as MetadataService
+    participant PM as ProviderManager
     participant DB as Database
-    
-    User->>App: 手動更新 または 定期Job実行
-    App->>MS: 再取得要求 (Work ID)
-    MS->>Prov: APIフェッチ
-    Prov-->>MS: 新規・更新データ
-    MS->>DB: 新データをINSERT (過去分は保持)
-    MS->>MS: 競合解決 (Conflict Resolution)
-    MS->>DB: 新採用値の is_primary = true に更新
-    MS->>App: ドメインイベント MetadataUpdated 発行
-    App->>User: UI / 検索インデックスの更新
+    participant FTS as IndexUpdateJob
+
+    User->>App: 再取得要求 または 定期Job実行
+    App->>MS: FetchMetadataAsync(workId)
+    MS->>PM: GetApplicableProviders(work.MediaType)
+    PM-->>MS: フィルタ済みProvider一覧
+    par 並列取得
+        MS->>Provider1: FetchAsync(work)
+        Provider1-->>MS: MetadataCandidate
+    and
+        MS->>Provider2: FetchAsync(work)
+        Provider2-->>MS: MetadataCandidate
+    end
+    MS->>MS: Conflict Resolution（採用値決定）
+    MS->>DB: METADATA_FIELD UPSERT（is_primary更新）
+    MS->>FTS: IndexUpdateJob投入
+    FTS->>DB: FTS5 METADATA_FTS 更新
+    MS->>App: MetadataUpdated イベント発行
 ```
 
-### イベントに応じた振る舞い
-- **Provider追加:** 新しいProviderのプラグインが追加された場合、一括再取得Jobを走らせ、既存のMetadata群に新たな候補を追加し、再評価（競合解決）を行う。
-- **Merge (統合):** Work A を Work B に統合する場合、A の MetadataField レコード群の `work_id` を B に書き換えた後、B の文脈で再度 競合解決 を実行し、採用値を一つに絞り直す。
-- **削除:** ユーザーがMetadataフィールドを手動で「削除」した場合、手動削除フラグ（または空文字によるManual Providerでの上書き）を行い、以降自動取得データが復活しないようにする。
+---
+
+# 11. 将来拡張
+
+1. **AIタグ生成 / 画像解析：** ローカルAIモデルを使用し、Assetから特徴を抽出してMetadataFieldとして追加
+2. **多言語Metadata：** `language` サフィックスでフィールド名を区別（`title_en` / `title_ja`）
+3. **OCR連携：** カバー画像からOCRで文字抽出し、IdentifierのEvidenceまたは補助Metadataとして活用
+4. **ベクトル検索：** Descriptionや評価テキストをEmbedding化し、セマンティック検索を追加
 
 ---
 
-## 9. 将来拡張
+# 12. 採用しなかった設計
 
-1. **AIタグ生成 / 画像・音声解析:**
-   - ローカルのAIモデルを利用し、Asset（動画ファイル）から特徴を抽出し、AIを一つのProviderとして `Tag` や `Genre` を生成する。
-2. **全文検索・ベクトル検索:**
-   - 蓄積された豊富な `Description` や `Review` メタデータを対象に、Elasticsearch等を用いた全文検索や、Embedding APIを通じたセマンティック検索を導入する。
-3. **多言語Metadata:**
-   - `METADATA_FIELD` テーブルに `language` カラムを追加（または `field_name` に `title_en` のようにサフィックスを付与）し、ユーザーのUI言語設定に応じたMetadataフォールバックを可能にする。
-4. **OCR連携:**
-   - カバー画像等からOCRで文字列を抽出し、識別子解決（Evidence）や補助的なMetadataとして活用する。
+| 不採用の設計案 | 不採用理由 |
+|---|---|
+| Workテーブルに直接カラムを持つ | Provider追加でスキーマ変更必須。競合値を保持不可 |
+| JSON一括保存（metadata_json） | フィールド別絞り込み・FTS5インデックス化が極めて困難 |
+| Providerごとの完全分離テーブル | Provider追加でテーブル追加必須。Open/Closed原則違反 |
+| MediaType別のFTS5テーブル | 管理コスト高・Plugin追加に弱い（FB⑦で明示的に却下） |
 
 ---
 
-## 10. 採用しなかった設計
-
-| 不採用の設計案 | メリット | デメリット | 不採用理由 |
-|---|---|---|---|
-| **Workテーブルに直接カラムを持つ** (Work.title, Work.actress...) | ER図が単純になり、JOINなしでSELECT可能。 | Providerが増えたり、管理項目が増えるたびにスキーマのALTER TABLEが必要。複数Providerからの競合値を保持できない。 | 拡張性と「Source of Truth」の競合解決の観点から却下。EAVモデルを採用。 |
-| **JSON一括保存** (Work.metadata_json) | スキーマレスで無限に柔軟。書き込みが容易。 | 特定フィールド（例：Actress）での絞り込みや集計、検索インデックス化がRDB上で極めて非効率になる。 | 高速検索と関係ベースのルール適用（Rule Engine）を重視するため却下。 |
-| **Providerごとの完全分離テーブル** (FANZA_METADATA, WIKI_METADATA...) | Providerの仕様変更に強い。型安全にしやすい。 | Providerが追加されるたびにテーブル追加・アプリ側のクエリ修正が必要になり、プラグイン機構と相性が悪い。 | Open/Closed原則に違反し、将来のProvider拡張を阻害するため却下。 |
-
----
-
-## 11. 設計の弱点とフィードバック
-
-### この設計の弱点
-- **EAVモデルのクエリ複雑性:** MetadataがEAV（Entity-Attribute-Value）形式であるため、「ActressがAで、かつRelease Dateが2023年のWork」を取得するようなSQLクエリが複雑（複数のJOINまたはサブクエリが必要）になる。
-  - *対策:* RDBへの直接クエリは避け、Search Engine（転置インデックス）側にクエリの責務を移譲することでパフォーマンスと複雑性を解決する。
-- **データ型の喪失:** `value` カラムがTEXT型であるため、発売日の日付比較や、収録時間の数値比較をDBレイヤーで直接行えない。
-  - *対策:* アプリケーション層でのパース処理、またはSearch Engineインデックス生成時に型付けを行う。
-
-### Database.md へのフィードバック
-1. **Manual Overrideの保証:** `PROVIDER` テーブルにおいて、手動編集用の `Manual` Providerレコード（ID固定または予約語）が初期化時に必ず投入され、最大の Priority を持つことを必須制約として明記するべき。
-2. **品質指標カラムの検討:** `WORK` テーブルに、非同期で算出された `metadata_fill_rate` のようなキャッシュカラムを追加することで、ギャラリーでの「情報不足」絞り込みが格段に高速化される可能性がある（今後の要検討事項）。
-
-### Work.md へのフィードバック
-1. **Workの同一性保証の強化:** WorkがMetadataを持たなくても成立するという定義（Work.md 1.1節）は強力だが、Metadataが完全に空のWork同士をどう区別するかがUI上の課題になる。Identifier Resolverが生成した `primary_identifier` が唯一の表示用ラベルとして機能することを強調しておくべき。
-2. **Mergeロジックの補足:** Work.md 4.2節のMerge時の「競合解決」において、本Metadata.mdの「競合解決ロジック（Conflict Resolution）」を呼び出す、という依存関係を明示することで、ドメイン間の協調関係がより明確になる。
-
----
-
-*WISE v2 Metadata.md v1.0 — 設計完了*
+*WISE v2 Metadata.md v2.0 — 2026-06-30*

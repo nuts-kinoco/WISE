@@ -1,135 +1,385 @@
-# WISE v2 Pipeline.md (v1.0)
+# WISE v2 Pipeline.md (v2.0)
 
-## 0. 本書の位置づけ
+> **本書はv1.0からv2.0への更新である。**  
+> 変更の主目的：StorageFormat検出パイプライン追加（FB③）、ICoverProvider統合パイプライン追加（FB④）、ArchiveIndex構築パイプライン追加（Comic対応）、IMediaViewer選択フロー（FB⑧）、FTS5 IndexUpdateJobパイプライン（FB⑦）、ReadingHistory更新フロー（FB②）。
 
-本書は、メディアライブラリ管理アプリケーション「WISE v2」における **システム全体の動的な振る舞い（Pipeline）** を定義する設計書である。
-
-前提資料として **Architecture.md v1.1**、**Database.md v1.0**、**Work.md v1.0**、**Metadata.md v1.0**、**Identifier.md v1.0** を参照し、矛盾しない形で設計を行う。
-
-本書はデータの静的な構造ではなく、「イベントがいつ発行され、誰がそれを拾い、どのような非同期ジョブとして実行されるか」というシステム内の血流（情報の流れ）を整理することを目的とする。
+前提資料：**Architecture.md v2.0**、**Domain.md v2.0**、**Database.md v2.0**
 
 ---
 
-## 1. Pipelineとは
+# 1. Pipelineとは
 
-### 責務と設計思想
+## 責務と設計思想
+
 Pipelineとは、WISE内で実行される「すべての状態変化の伝播」と「時間のかかる処理（非同期処理）」を安全かつ確実にオーケストレーションする仕組みである。
 
 設計思想の根幹は **「ユーザーの操作（UI）をブロックしないこと」** と **「部分的失敗を許容し、全体を止めないこと」** にある。
 
-### 各コンポーネントとの関係
-- **Jobとの関係:** Pipelineの中で、時間・ネットワーク・CPUを消費する処理（メタデータ取得、ハッシュ計算等）はすべて `Job` としてキューに投入され、Workerによって非同期実行される。
-- **Eventとの関係:** Pipelineの各フェーズの完了（例：Workが生成された、メタデータが更新された）は `Domain Event` として発行され、次の処理のトリガーとなる。
-- **Providerとの関係:** Providerからのデータ取得はPipelineの一部（Job）として並列実行され、一つのProviderの失敗はPipeline全体に影響を与えない。
-- **Rule Engineとの関係:** Rule EngineはMetadataやAssetの更新Eventを購読し、必要なタイミングでリネームや整理ルールを後追いで適用する。
+## v2での追加コンポーネント
+
+| コンポーネント | 役割 | 関連FB |
+|---|---|---|
+| StorageFormatDetector | Assetのコンテナ形式を自動検出 | FB③ |
+| AssetRoleAssigner | ImportJob内でAssetのRoleを確定 | FB① |
+| CoverPipeline | ICoverProviderチェーンでカバー取得 | FB④ |
+| ArchiveIndexPipeline | IArchiveReaderでページリスト構築 | FB③ |
+| IndexUpdatePipeline | FTS5仮想テーブル更新 | FB⑦ |
+| ViewerRouter | IMediaViewerでビューワーを選択 | FB⑧ |
+| ReadingHistoryFlush | フロントエンド→DBへのdebounce更新 | FB② |
 
 ---
 
-## 2. メインパイプライン
+# 2. メインパイプライン（v2更新）
 
-ファイル発見から、ギャラリーへの表示、そしてメタデータ強化に至る基本フロー。
-
-### メインパイプライン図
+ファイル発見からGallery表示・Viewer選択・FTS5更新に至る完全フロー。
 
 ```mermaid
 flowchart TD
     subgraph Input Phase
-        PF[PhysicalFile 発見] --> Asset[Asset 生成]
+        PF[PhysicalFile 発見] --> Asset[Asset 生成\nwork_id=NULL]
+        Asset --> SFD[StorageFormat 検出\nMIME/拡張子から判定]
     end
-    
+
     subgraph Identification Phase
-        Asset --> Norm[Normalizer]
-        Norm --> ID[Identifier Resolver]
-        ID --> Work[Work 決定 / 生成]
+        SFD --> Norm[Normalizer\nファイル名正規化]
+        Norm --> ID[Identifier Resolver\nEvidence収集・Confidence算出]
+        ID --> WorkDec{Work決定}
+        WorkDec -- 既存Work --> ExWork[既存Work に紐付け]
+        WorkDec -- 新規 --> NewWork[新規Work生成\nmedia_type設定]
+    end
+
+    subgraph Role Assignment Phase
+        ExWork --> RoleA[AssetRole 確定\nImport処理]
+        NewWork --> RoleA
     end
 
     subgraph Sync Output Phase
-        Work --> Gal[Gallery 即時表示]
+        RoleA --> Gal[Gallery 即時表示\nMediaDisplayProfile適用]
     end
 
-    subgraph Async Enrichment Phase
-        Work -- "WorkCreated Event" --> JobQ[(Job Queue)]
-        JobQ --> MetaJob[MetadataFetchJob]
-        MetaJob --> Confl[Conflict Resolution]
-        Confl --> MetaUpd[Metadata 更新]
+    subgraph Async Job Phase
+        RoleA -- WorkCreated Event --> JobQ[(Job Queue)]
+        JobQ --> MetaJob[MetadataFetchJob\nProvider別並列取得]
+        JobQ --> HashJob[HashCalcJob\nSHA256算出]
+        JobQ --> CoverJob[CoverExtractJob\nICoverProvider Chain]
+        JobQ --> ArchJob[ArchiveIndexJob\nIArchiveReader\nComic/Book のみ]
     end
 
-    subgraph Async Post-Processing Phase
-        MetaUpd -- "MetadataUpdated Event" --> Rule[Rule Engine]
-        MetaUpd --> Search[Search Index 更新]
-        MetaUpd --> Hist[Event Log 記録]
+    subgraph Post-Processing Phase
+        MetaJob -- MetadataUpdated --> IdxJob[IndexUpdateJob\nFTS5更新]
+        MetaJob -- MetadataUpdated --> RuleEng[Rule Engine]
+        MetaJob -- MetadataUpdated --> EvtLog[Event Log]
+        CoverJob --> CoverCache[(Cover Cache)]
+        ArchJob --> PageList[(Page List\nJSON Cache)]
     end
 ```
 
-**重要なポイント:** `Work決定` の直後にGalleryへの表示（同期）が行われ、Metadata取得以降はすべて非同期パイプラインとしてバックグラウンドで実行される。
-
 ---
 
-## 3. Job System
+# 3. StorageFormat検出パイプライン（v2新規）
 
-時間のかかる処理を安全に実行するための非同期基盤。
-
-### Job Flow (ライフサイクルとリトライ)
+ファイル発見時にStorageFormatを自動検出し、ASSETに記録する。
 
 ```mermaid
-stateDiagram-v2
-    [*] --> Queued : Job投入
-    Queued --> Running : Workerが取得 (並列実行)
-    Running --> Succeeded : 成功
-    Running --> Failed : 失敗 (例外/タイムアウト)
-    Failed --> Queued : Retry (Backoff待機)
-    Failed --> DeadLetter : 最大Retry超過
-    Queued --> Cancelled : 手動/システムキャンセル
+flowchart LR
+    File[ファイルパス] --> Ext[拡張子チェック]
+    Ext -- .zip/.cbz --> Arch[Archive]
+    Ext -- .rar/.cbr --> Arch
+    Ext -- .pdf --> Pdf[Pdf]
+    Ext -- .epub --> Epub[Epub]
+    Ext -- ディレクトリ --> Folder[Folder]
+    Ext -- .mp4/.mkv/.avi --> SF[SingleFile]
+    Ext -- その他 --> SF
+    Arch --> MIME[MIME署名検証\n先頭バイトで確認]
+    Pdf --> MIME
+    MIME --> SetSF[ASSET.storage_format 設定]
+    Epub --> SetSF
+    Folder --> SetSF
+    SF --> SetSF
 ```
 
-- **Queue & Worker:** `JOB` テーブルをキューとして使用し、複数のWorkerスレッド/プロセスが優先度（Priority）順にJobを取得・実行する。
-- **Priority:** ユーザーが直接指示した更新Jobは高優先度、定期スキャンやハッシュ計算は低優先度とする。
-- **Timeout & Retry:** 各Jobにはタイムアウトが設定される。ネットワーク障害等で失敗した場合は、Exponential Backoff（指数的後退）アルゴリズムで再試行間隔を空けながら再実行される。
-- **Cancellation:** 同一Workに対してより新しいJobが投入された場合、古いJobはキャンセルされることがある。
+**StorageFormat検出ルール：**
+
+| 優先度 | 判断方法 | 説明 |
+|---|---|---|
+| 1 | MIMEシグネチャ（バイナリ先頭） | 最も信頼性が高い |
+| 2 | 拡張子 | MIMEが不明な場合 |
+| 3 | ディレクトリ判定 | パスがディレクトリであれば `Folder` |
+| 4 | デフォルト | 判定不能の場合は `SingleFile` |
 
 ---
 
-## 4. Provider Pipeline
+# 4. AssetRole確定パイプライン（v2新規）
 
-Metadata取得において、複数のProviderをどう協調させるかの設計。
+AssetがWorkに紐付けられた後、WorkのMediaTypeとAssetの物理属性からRoleを確定する。
 
-### Provider Sequence図
+```mermaid
+flowchart TD
+    Asset[Asset\nstorage_format確定済み] --> MT{Work.MediaType}
+    MT -- Video --> VR{storage_format?}
+    VR -- SingleFile --> VideoRole[role=Video]
+    VR -- Archive/Folder --> AttRole[role=Attachment]
+    VR -- Other --> SampleRole{ファイル名にsample含む?}
+    SampleRole -- YES --> SR[role=Sample]
+    SampleRole -- NO --> VR2[role=Attachment]
+
+    MT -- Comic --> CR{storage_format?}
+    CR -- Archive/Folder/Pdf --> ArchRole[role=Archive]
+    CR -- SingleFile 画像 --> ImgRole[role=Image]
+
+    MT -- Book --> BR{storage_format?}
+    BR -- Epub/Pdf --> BookRole[role=Archive]
+    BR -- Other --> BAtt[role=Attachment]
+
+    VideoRole --> Done[ASSET.role 確定]
+    ArchRole --> Done
+    ImgRole --> Done
+    BookRole --> Done
+    SR --> Done
+    AttRole --> Done
+    BAtt --> Done
+```
+
+**カバー画像のRole確定：**
+- ファイル名に `cover`, `poster`, `fanart`, `thumb` を含む画像ファイル → `CoverPortrait` または `CoverLandscape`（アスペクト比で判断）
+- アスペクト比 > 1.0（横長）→ `CoverLandscape`
+- アスペクト比 <= 1.0（縦長）→ `CoverPortrait`
+
+---
+
+# 5. ICoverProvider パイプライン（v2新規）
+
+CoverExtractJobが実行されると、ICoverProvider Chain of Responsibilityが動作する。
+
+```mermaid
+sequenceDiagram
+    participant Job as CoverExtractJob
+    participant CS as CoverService
+    participant MCP as MetadataCoverProvider
+    participant ACP as ArchiveCoverProvider
+    participant VTP as VideoThumbnailProvider
+    participant DP as DefaultCoverProvider
+    participant Cache as COVER_CACHE
+
+    Job->>CS: GetCoverAsync(work)
+    CS->>MCP: GetCoverAsync(work)  [Priority:100]
+    alt MetadataField.cover_url が存在
+        MCP-->>CS: CoverResult（URLダウンロード）
+        CS->>Cache: UPSERT（provider_name=MetadataCoverProvider）
+        CS-->>Job: Done
+    else cover_url なし
+        MCP-->>CS: null
+        alt MediaType = Comic
+            CS->>ACP: GetCoverAsync(work)  [Priority:80]
+            ACP->>ACP: IArchiveReader.GetPageStreamAsync(path, 0)
+            ACP-->>CS: CoverResult（1ページ目画像）
+            CS->>Cache: UPSERT
+        else MediaType = Video
+            CS->>VTP: GetCoverAsync(work)  [Priority:60]
+            VTP->>VTP: ffmpeg -ss 00:01:00 -frames:v 1 ...
+            VTP-->>CS: CoverResult（フレーム画像）
+            CS->>Cache: UPSERT
+        else すべて失敗
+            CS->>DP: GetCoverAsync(work)  [Priority:0]
+            DP-->>CS: CoverResult（プレースホルダー）
+        end
+    end
+```
+
+**キャッシュ方針：**
+- キャッシュパス：`{AppData}/WISE/covers/{workId}/{provider}.jpg`
+- MetadataCoverProviderのキャッシュは `expires_at = null`（無期限）。ただしMetadataが更新されたら再取得をJobに投入
+- ArchiveCoverProvider/VideoThumbnailProviderのキャッシュは `expires_at = null`（ファイルが変わらない限り有効）
+
+---
+
+# 6. ArchiveIndex パイプライン（v2新規、Comic/Book専用）
+
+```mermaid
+flowchart LR
+    Job[ArchiveIndexJob] --> AR{IArchiveReader選択\nstorage_format基準}
+    AR -- Archive\n.zip/.cbz/.rar/.cbr --> ZR[ZipArchiveReader\nまたはRarArchiveReader]
+    AR -- Pdf --> PR[PdfArchiveReader]
+    AR -- Epub --> ER[EpubArchiveReader]
+    AR -- Folder --> FR[FolderArchiveReader]
+    ZR --> Pages[ArchivePage一覧\n[{index, name, size}]]
+    PR --> Pages
+    ER --> Pages
+    FR --> Pages
+    Pages --> Cache[ページリストをJSON形式でキャッシュ]
+    Pages --> PCnt[METADATA_FIELD.page_count 更新\nis_primary=true, provider=system]
+```
+
+**ArchiveIndexJobの投入タイミング：**
+- AssetRole確定時（`role=Archive` と確定された直後）
+- アーカイブファイルの置き換えを検出した時（SHA256が変わった時）
+
+**パフォーマンス考慮：**
+- ページリストはJSONキャッシュに保存し、ビューワー初回開時のリスト生成をスキップ
+- 1ページ目の画像はCoverExtractJobが別途取得（ArchiveIndexJobはページリストのみ、画像バイト列は持たない）
+
+---
+
+# 7. FTS5 IndexUpdate パイプライン（v2新規）
+
+```mermaid
+flowchart LR
+    Evt[MetadataUpdated Event] --> Job[IndexUpdateJob]
+    Job --> DB[(METADATA_FIELD)]
+    DB --> FTS[METADATA_FTS\nFTS5仮想テーブル]
+    FTS --> Query[全文検索クエリ\nMediaType非依存]
+```
+
+**更新方式：**
+```sql
+-- コンテンツテーブルモードを使用（rebuild）
+INSERT INTO METADATA_FTS(METADATA_FTS) VALUES('rebuild');
+-- または差分更新（delete + insert）
+INSERT INTO METADATA_FTS(METADATA_FTS, rowid, value)
+  VALUES('delete', :oldRowid, :oldValue);
+INSERT INTO METADATA_FTS(rowid, work_id, field_name, value)
+  VALUES(:rowid, :workId, :fieldName, :value);
+```
+
+**設計原則（FB⑦）：**
+- MediaType依存のインデックス分割は行わない
+- 全てのMetadataField（`is_primary = true`）がFTS5の対象
+
+---
+
+# 8. IMediaViewer選択フロー（v2新規）
+
+ビューワー起動時にViewerRouterServiceがIMediaViewerを選択し、フロントエンドに `ViewerRoute` を返す。
+
+```mermaid
+sequenceDiagram
+    participant UI as Frontend
+    participant API as WorksController
+    participant VR as ViewerRouterService
+    participant DB as Database
+
+    UI->>API: GET /api/works/{id}/viewer-info
+    API->>DB: Work取得（media_type, assets）
+    API->>VR: GetViewer(work.MediaType)
+    VR-->>API: IMediaViewer（ViewerRoute, Capabilities）
+    API-->>UI: { viewerRoute: "/viewer/comic",\n  capabilities: { supportsPageNavigation: true, ... },\n  resumePosition: { pageNumber: 42 } }
+    UI->>UI: router.push(viewerRoute + "?workId=" + id)
+```
+
+**UIの責務：**
+- `viewerRoute` に従ってルーティングするだけ
+- `capabilities` を読んでボタン（速度変更・ブックマーク等）の表示/非表示を制御
+- if(mediaType === "Video") などのMediaType依存コードを書かない
+
+---
+
+# 9. ReadingHistory更新フロー（v2新規）
+
+```mermaid
+sequenceDiagram
+    participant Viewer as フロントエンドViewer
+    participant LS as localStorage
+    participant API as ReadingHistoryController
+    participant DB as READING_HISTORY
+
+    Viewer->>LS: 進捗をリアルタイム保存\n（wise-reader-{workId}-{deviceId}）
+    loop ページめくり・時間経過
+        Viewer->>LS: 更新（debounce: 5秒）
+    end
+    Viewer->>API: PUT /api/works/{id}/reading-history\n（ページクローズ時 / 5秒interval）
+    API->>DB: UPSERT READING_HISTORY\n（work_id, device_id）UNIQUE
+    DB-->>API: 200 OK
+```
+
+**デバイスID生成：**
+```javascript
+// localStorage初回起動時に生成・保持
+const deviceId = localStorage.getItem('wise-device-id')
+  ?? crypto.randomUUID();
+localStorage.setItem('wise-device-id', deviceId);
+```
+
+**フラッシュのタイミング：**
+- ページめくり後5秒（debounce）
+- ビューワーunmount時（`beforeunload` イベント）
+- アプリバックグラウンド遷移時（`visibilitychange` → hidden）
+
+---
+
+# 10. Job System（v2更新）
+
+## JobType一覧（v2追加分）
+
+| JobType | 説明 | 投入トリガー | 新規/既存 |
+|---|---|---|---|
+| `MetadataFetch` | Metadata取得 | WorkCreated | 既存 |
+| `HashCalc` | SHA256計算 | AssetAssociated | 既存 |
+| `Thumbnail` | サムネイル生成 | WorkCreated（Video） | 既存 |
+| `CoverExtract` | ICoverProvider Chain実行 | WorkCreated / MetadataUpdated | **新規** |
+| `ArchiveIndex` | IArchiveReaderでページリスト構築 | AssetRole=Archive確定時 | **新規** |
+| `IndexUpdate` | FTS5インデックス更新 | MetadataUpdated | **新規** |
+| `MediaInfo` | 動画MediaInfo取得 | AssetAssociated（Video） | 既存 |
+| `Duplicate` | 重複検出 | HashCalc完了後 | 既存 |
+
+## 優先度設計
+
+```
+100: ユーザーが明示的に指示したJob（手動再取得等）
+ 80: CoverExtract（Gallery表示に影響）
+ 70: MetadataFetch
+ 60: ArchiveIndex（ビューワー起動に影響）
+ 50: IndexUpdate（検索に影響、少し遅延許容）
+ 40: HashCalc
+ 30: Thumbnail
+ 20: MediaInfo
+ 10: Duplicate
+```
+
+---
+
+# 11. Provider Pipeline（v2更新）
+
+Metadata取得において、WorkのMediaTypeに応じたProviderのみを並列実行する。
 
 ```mermaid
 sequenceDiagram
     participant Worker
-    participant ProviderManager
-    participant P_Fanza as FANZA API
-    participant P_Wiki as Wiki Scraper
-    participant P_Local as Local NFO
-    participant MetadataService
+    participant PM as ProviderManager
+    participant MF as MediaFilter
+    participant P1 as FANZA API（Video専用）
+    participant P2 as DLSite（Comic専用）
+    participant P3 as LocalNFO（All対応）
+    participant MS as MetadataService
 
-    Worker->>ProviderManager: fetch(Work)
-    par 並列取得
-        ProviderManager->>P_Fanza: request
-        P_Fanza-->>ProviderManager: Success (Data)
-    and
-        ProviderManager->>P_Wiki: request
-        P_Wiki-->>ProviderManager: Timeout (Error)
-    and
-        ProviderManager->>P_Local: request
-        P_Local-->>ProviderManager: Success (Data)
+    Worker->>PM: FetchMetadata(work)
+    PM->>MF: FilterByMediaType(work.MediaType)
+    alt MediaType = Video
+        MF-->>PM: [FANZA, JavBus, LocalNFO]
+        par 並列取得
+            PM->>P1: request
+            P1-->>PM: Success
+        and
+            PM->>P3: request
+            P3-->>PM: Success
+        end
+    else MediaType = Comic
+        MF-->>PM: [DLSite, Getchu, ComicInfoXml, LocalNFO]
+        par 並列取得
+            PM->>P2: request
+            P2-->>PM: Success
+        and
+            PM->>P3: request
+            P3-->>PM: Success
+        end
     end
-    ProviderManager->>MetadataService: 部分成功データを渡す
-    MetadataService->>MetadataService: Conflict Resolution (競合解決)
-    MetadataService-->>Worker: 更新完了
+    PM->>MS: 取得結果を渡す（部分成功でもOK）
+    MS->>MS: Conflict Resolution
+    MS-->>Worker: MetadataUpdated
 ```
-
-- **部分成功 (Partial Success):** いずれかのProviderがタイムアウトやエラーになっても、取得できた他Providerのデータのみでパイプラインを継続する。
-- **Fallback:** 高優先度Providerが失敗した場合、次点のProviderのデータが競合解決（Conflict Resolution）フェーズで採用値（Primary）に昇格する。
 
 ---
 
-## 5. Event Pipeline
-
-システム内の状態変化を伝播させるパブサブ（Publish-Subscribe）モデル。
-
-### Mermaid Event Flow
+# 12. Event Pipeline
 
 ```mermaid
 flowchart LR
@@ -138,93 +388,53 @@ flowchart LR
         E2((WorkCreated))
         E3((MetadataUpdated))
         E4((RuleExecuted))
+        E5((AssetRoleAssigned))
     end
 
     subgraph Subscribers
         S_ID[Identifier Resolver]
         S_Job[Job Scheduler]
+        S_Cover[CoverExtractJob]
+        S_Arch[ArchiveIndexJob]
         S_Rule[Rule Engine]
-        S_Search[Search Indexer]
+        S_Search[IndexUpdateJob]
         S_Hist[Event Log Service]
     end
 
     E1 --> S_ID
     E2 --> S_Job
+    E2 --> S_Cover
     E3 --> S_Rule
     E3 --> S_Search
-    E1 & E2 & E3 & E4 --> S_Hist
+    E5 --> S_Arch
+    E1 & E2 & E3 & E4 & E5 --> S_Hist
 ```
 
-- **購読関係の分離:** イベントを発行する側（Publisher）は、誰がそのイベントを購読（Subscriber）しているかを知らない。これにより、将来的な機能追加（新しいSubscriberの追加）が容易になる。
-
 ---
 
-## 6. Search更新
+# 13. Error Recovery（v2更新）
 
-UIや検索エンジンへのデータ反映タイミング。
-
-- **Gallery更新:** 同期（リアルタイム）。DBへの直接クエリで描画されるため、Workが生成された瞬間やMetadataの採用値が変わった瞬間に反映される。
-- **Search Index更新:** 非同期。`MetadataUpdated` や `WorkCreated` イベントをフックして `IndexUpdateJob` がキューに投入される。数秒〜数十秒のタイムラグを許容する結果整合性（Eventual Consistency）モデル。
-- **Collection (Smart Folder) 更新:** 非同期キャッシュ更新。ルール評価コストが高いため、検索インデックス更新と同時期にキャッシュをリフレッシュする。
-
----
-
-## 7. Error Recovery (障害回復)
-
-| 障害シナリオ | 回復（リカバリ）戦略 |
+| 障害シナリオ | 回復戦略 |
 |---|---|
-| **ネットワーク障害** | Provider Pipelineでのタイムアウト。Job自体をFailedとし、一定時間後に再試行（Retry）する。 |
-| **Providerサイト仕様変更 (Scraping停止)** | Provider Managerが連続エラーを検知し、Circuit Breakerを発動。対象Providerへのアクセスを一時停止し、パイプラインの無駄な遅延を防ぐ。他ProviderへFallbackする。 |
-| **Identifier解決失敗 (Unknown)** | Workに紐付かない Orphaned Asset として保留される。ユーザーが Diagnostic 画面から手動で解決（Manual Override）することで、パイプラインが再開される。 |
-| **Jobワーカー強制終了** | DB（`JOB` テーブル）上でステータスが `Running` のままタイムアウトしたJobを、監視プロセスが `Failed` に戻してキューに復帰させる（ゾンビジョブ回収）。 |
+| **ネットワーク障害（Metadata取得）** | Job Retry（Exponential Backoff）。最大リトライ超過でDeadLetter |
+| **Providerサイト仕様変更** | Circuit Breaker発動。他Providerにフォールバック |
+| **IArchiveReaderが対応外の形式** | ArchiveIndexJob失敗。role=Archive のみ確定し、ページリストなしでGallery表示 |
+| **ICoverProvider全滅** | DefaultCoverProviderがプレースホルダーを返す（エラーにしない） |
+| **FTS5更新失敗** | IndexUpdateJobを再投入。FTS5は古い状態のまま検索を継続（Eventual Consistency） |
+| **Identifier解決失敗** | Orphaned Asset として保留。ユーザーがDiagnostic画面から手動解決 |
+| **Jobワーカー強制終了** | `status = 'Running'` でタイムアウトしたJobを監視プロセスが `Failed` に戻してキューに復帰 |
 
 ---
 
-## 8. 将来拡張
+# 14. 採用しなかった設計
 
-Pipeline基盤が整っていることで、以下のような機能拡張が容易に追加できる。
-
-1. **AI解析 / OCR:** 
-   - `AssetAssociated` イベントをトリガーに、新規Job `AiAnalysisJob` を投入する。結果が得られたら `MetadataUpdated` イベントを発行するだけ。
-2. **Cloud Sync (クラウド同期):**
-   - Event Logを順番に読み出し（Event Sourcing的アプローチ）、クラウド側のデータベースに変更差分（Delta）として送信・同期するSubscriberを追加する。
-3. **Webhook / 外部通知:**
-   - 特定のイベント（例：お気に入り女優の新規Work追加）をトリガーに、DiscordやTelegramへ通知を送るSubscriberを追加する。
+| 不採用の設計案 | 不採用理由 |
+|---|---|
+| 完全な同期処理（MetadataまでUIをブロック） | ネットワークが遅いとアプリ全体がフリーズ |
+| ComicCoverExtractor（MediaType固有クラス直接呼び出し） | Plugin追加時にコア変更が必要。Strategy化（ICoverProvider）を採用（FB④） |
+| MediaType別のJob Pipeline分岐 | `if(mediaType == Comic)` がPipeline層に入るとPlugin化に耐えられない |
+| ReadingHistoryのリアルタイムDB更新（毎ページめくりごと） | SQLiteのロック競合リスク。debounce + localStorageで対応（FB②） |
 
 ---
 
-## 9. 採用しなかった設計
-
-| 不採用の設計案 | メリット | デメリット | 不採用理由 |
-|---|---|---|---|
-| **完全な同期処理 (Metadataが取れるまでUIをブロック)** | 実装が容易。状態管理がシンプル。 | ネットワークが遅いとアプリ全体がフリーズする。大量追加時に致命的。 | 快適なUX（高速表示）という絶対要件を満たせないため却下。 |
-| **巨大な定期バッチ処理 (1日1回全更新)** | システム負荷が予測しやすい。 | ファイルを追加しても翌日までメタデータが反映されない。 | ユーザーのアクションに対して即座にフィードバックを返す要件に反するため却下。 |
-| **Provider依存Pipeline (FANZA用フロー、Wiki用フローの分離)** | 各サイトの特性に合わせた個別最適化が容易。 | サイトごとの例外処理でメインパイプラインが肥大化し、スパゲティコード化する。 | Plugin追加に耐えられない（Open/Closed原則違反）ため却下。ProviderはManagerで抽象化し、パイプラインは共通化する。 |
-
----
-
-## 10. 設計の弱点とフィードバック
-
-### この設計の弱点
-- **結果整合性（Eventual Consistency）によるUXの混乱:** メタデータ取得や検索インデックス更新が非同期であるため、ファイルを追加した直後は「タイトルなし」で表示されたり、検索にヒットしなかったりするタイムラグが発生する。ユーザーに「現在バックグラウンドで処理中」であることをUIで適切にフィードバックする必要がある。
-- **SQLiteでのJob Queue競合:** `JOB` テーブルへの頻繁なポーリングと更新（ステータス変更）が、SQLiteのDBロックを引き起こし、メインUIの読み込みを遅延させる可能性がある。
-  - *対策:* ジョブ状態のポーリング間隔を調整する、またはインメモリキューとDBのハイブリッド構成を検討する。
-
-### Architecture へのフィードバック
-- **Event Busの明記:** Architecture.md 5章（コアコンポーネント）において、各サービスが互いを直接呼び出すのではなく、「Event Bus」を介してイベントをやり取りする構成図へアップデートすべきである（結合度を下げるため）。
-
-### Database へのフィードバック
-- **Dead Letter Queue (DLQ):** 最大リトライ回数を超えたJob（Dead Letter）のステータス管理や、それらをまとめて再実行・破棄するためのカラム（または別テーブル）の考慮が `JOB` テーブルに必要かもしれない。
-
-### Work へのフィードバック
-- **状態の一時性:** Metadataが非同期で更新され続けるため、Workの「完全な状態（isComplete）」という定義は流動的になる。Work.md のモデリングにおいて、「Metadata取得待ち」といった補助ステータスは持たせず、あくまでイベント（振る舞い）として解決した設計方針は正しかったことがPipeline上で証明された。
-
-### Metadata へのフィードバック
-- **競合解決のタイミング:** 複数Providerを並列実行するため、「すべてのProviderの処理が終わってから一括でConflict Resolutionを実行する」か、「データが届くたびに再評価する」かのポリシーが必要。本Pipelineでは、Jobの完了単位で競合解決（再評価）を行う前提としている。
-
-### Identifier へのフィードバック
-- **Identifier再実行のトリガー:** Assetのパスが変わった場合だけでなく、新しい Metadata が取得された際（MetadataUpdatedイベント）にも、Identifierを再評価すべきかが議論になる。処理コストが高いため、「Identifierによる解決」フェーズと「Metadata Enrichment」フェーズは一方通行（フィードバックループを作らない）とするのが安全である。
-
----
-
-*WISE v2 Pipeline.md v1.0 — 設計完了*
+*WISE v2 Pipeline.md v2.0 — 2026-06-30*
