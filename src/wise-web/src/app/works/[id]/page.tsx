@@ -1,9 +1,10 @@
 "use client";
 
 import { useWork } from "@/hooks/useWork";
-import { deleteWork, patchUserData, enqueueFetchMetadata, openFolder, fetchThumbnailAssets, setCover, uploadCover, ThumbnailAsset, addUserTag, deleteUserTag, deleteGenreTag } from "@/lib/api";
+import { deleteWork, patchUserData, enqueueFetchMetadata, openFolder, fetchThumbnailAssets, setCover, uploadCover, ThumbnailAsset, addUserTag, deleteUserTag, deleteGenreTag, fetchRelatedWorks } from "@/lib/api";
+import { DashboardCard } from "@/components/dashboard/DashboardCard";
 import { resolveCoverUrl } from "@/lib/media";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Loader2, ChevronDown, ChevronUp, Calendar, Clock, Building2, Tag, Film, Layers, Trash2, Heart, Star, RefreshCw, FolderOpen, Upload, Pencil, X, Plus, CheckCircle2, AlertCircle, History, BookOpen } from "lucide-react";
 import { Skeleton } from "@/components/ui/Skeleton";
 import Image from "next/image";
@@ -32,6 +33,12 @@ const EVENT_LABELS: Record<string, string> = {
 export default function WorkDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
   const { data: work, isLoading, isError } = useWork(resolvedParams.id);
+  const { data: relatedWorks } = useQuery({
+    queryKey: ["related", resolvedParams.id],
+    queryFn: () => fetchRelatedWorks(resolvedParams.id),
+    enabled: !!resolvedParams.id,
+    staleTime: 120_000,
+  });
   const [devMode, setDevMode] = useState(false);
   const [coverTab, setCoverTab] = useState<"portrait" | "landscape">("portrait");
   const [deleteModal, setDeleteModal] = useState(false);
@@ -993,6 +1000,20 @@ export default function WorkDetailPage({ params }: { params: Promise<{ id: strin
           </div>
         </div>
       </div>
+
+      {/* Related Works */}
+      {relatedWorks && relatedWorks.length > 0 && (
+        <div className="border-t border-border/40 mt-4">
+          <div className="max-w-screen-xl mx-auto px-4 md:px-8 py-8">
+            <h2 className="text-[15px] font-semibold text-foreground mb-4">関連作品</h2>
+            <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-none">
+              {relatedWorks.map((w) => (
+                <DashboardCard key={w.id} work={w} />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

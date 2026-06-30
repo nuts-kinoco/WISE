@@ -57,7 +57,7 @@ density切替（compact/normal/rich/list）は Sprint 14-22 で実装済み。
 ---
 
 ## Sprint 26 — Related Works + Timeline 再設計
-**Status: PENDING**
+**Status: DONE**
 
 ### 実装
 - `GET /api/works/{id}/related?field=actress&limit=8`

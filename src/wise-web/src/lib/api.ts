@@ -143,6 +143,15 @@ export async function fetchHome(deviceId: string): Promise<HomeData> {
   return res.json();
 }
 
+export async function fetchRelatedWorks(workId: string, field?: string, limit = 8): Promise<WorkItem[]> {
+  const url = new URL(`${API_BASE_URL}/works/${workId}/related`);
+  if (field) url.searchParams.set('field', field);
+  url.searchParams.set('limit', limit.toString());
+  const res = await fetch(url.toString());
+  if (!res.ok) return [];
+  return res.json();
+}
+
 export async function fetchRandomWork(): Promise<WorkItem | null> {
   const res = await fetch(`${API_BASE_URL}/home/random`);
   if (res.status === 404) return null;

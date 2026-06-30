@@ -155,13 +155,7 @@ namespace WISE.Api.Controllers
         }
 
         private static string? ResolveMediaUrl(string? value, IEnumerable<WISE.Domain.Entities.Asset> assets)
-        {
-            if (value == null) return null;
-            if (value.StartsWith("http", StringComparison.OrdinalIgnoreCase)) return value;
-            if (value.StartsWith("/api/", StringComparison.OrdinalIgnoreCase)) return value;
-            var match = assets.FirstOrDefault(a => a.FilePath == value);
-            return match != null ? $"/api/assets/{match.Id}/content" : null;
-        }
+            => WorkItemMapper.ResolveMediaUrl(value, assets);
 
         [HttpGet("{id}")]
         public async Task<IActionResult> GetWorkDetail(string id)
@@ -723,6 +717,47 @@ namespace WISE.Api.Controllers
                     supportsResume = route.Capabilities.SupportsResume,
                 }
             });
+        }
+
+        [HttpGet("{id}/related")]
+        public async Task<IActionResult> GetRelated(
+            string id,
+            [FromQuery] string? field = null,
+            [FromQuery] int limit = 8,
+            CancellationToken ct = default)
+        {
+            if (!Guid.TryParse(id, out var workId))
+                return BadRequest("Invalid Work ID format.");
+
+            // Determine which fields to search for related works
+            var targetFields = string.IsNullOrWhiteSpace(field)
+                ? new[] { "Actress", "ActressTag", "Series", "Circle", "Author", "Maker" }
+                : new[] { field };
+
+            // Get values of those fields from the source work
+            var sourceValues = await _dbContext.MetadataFields
+                .AsNoTracking()
+                .Where(m => m.WorkId == workId && targetFields.Contains(m.FieldName) && m.Value != null && m.Value != "")
+                .Select(m => new { m.FieldName, m.Value })
+                .ToListAsync(ct);
+
+            if (sourceValues.Count == 0)
+                return Ok(new object[0]);
+
+            var fieldNames = sourceValues.Select(v => v.FieldName).Distinct().ToList();
+            var values     = sourceValues.Select(v => v.Value).Distinct().ToList();
+
+            var related = await _dbContext.Works
+                .AsNoTracking()
+                .Include(w => w.MetadataFields)
+                .Include(w => w.Assets)
+                .Where(w => w.Id != workId
+                    && w.MetadataFields.Any(m => fieldNames.Contains(m.FieldName) && values.Contains(m.Value)))
+                .OrderByDescending(w => w.CreatedAt)
+                .Take(limit)
+                .ToListAsync(ct);
+
+            return Ok(related.Select(WorkItemMapper.Map));
         }
 
         [HttpGet("{id}/epub")]
