@@ -1,6 +1,4 @@
 ﻿using System.Collections.Generic;
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.RegularExpressions;
 using WISE.Domain.Models;
 
@@ -41,9 +39,14 @@ public static class IdentifierParser
         new(@"\b(d_?\d{5,})\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     // 同人誌標準命名規則: (C107) [サークル名 (作者名)] 題名 (出版社).拡張子
-    // 例: (C107) [ジャックとニコルソン (のりパチ)] たんさく費用の稼ぎ方 (瑠璃の宝石).zip
+    // 例: (同人誌) [アヘ丸] ...zip / (コミティア156) [みくろぺえじ (黒本君)] ...zip
+    // サークル名をidentifier（＝フォルダ名）として使用する
     private static readonly Regex DoujinishiRegex =
         new(@"^\s*\([^)]+\)\s*\[([^\]]+)\]\s*([^([]+)", RegexOptions.Compiled);
+
+    // Windows パスで使用できない文字
+    private static readonly Regex InvalidFolderCharsRegex =
+        new(@"[\\/:*?""<>|]", RegexOptions.Compiled);
 
     /// <summary>
     /// ファイル名から Identifier 候補を全て抽出して返す。
@@ -98,17 +101,14 @@ public static class IdentifierParser
         }
 
         // 同人誌標準命名規則: (Event) [Circle (Author)] Title ...
-        // 汎用商業AVパターンより先に評価（商業識別子のない同人ファイル向け）
+        // サークル名（[...]の中身）をそのままidentifier＝フォルダ名として使用する。
+        // 同一サークルの複数作品は同じWork（フォルダ）にまとめられる。
         var doujinMatch = DoujinishiRegex.Match(fileName);
         if (doujinMatch.Success)
         {
             var circle = doujinMatch.Groups[1].Value.Trim();
-            // タイトル部分から拡張子を除去
-            var titleRaw = doujinMatch.Groups[2].Value.Trim();
-            var dotIdx = titleRaw.LastIndexOf('.');
-            var title = dotIdx > 0 ? titleRaw[..dotIdx].Trim() : titleRaw;
-            var stableId = "DOUJIN-" + GenerateShortHash(circle + "|" + title);
-            results.Add(new IdentifierCandidate("DoujinishiPattern", stableId));
+            var safeCircle = InvalidFolderCharsRegex.Replace(circle, "_").Trim();
+            results.Add(new IdentifierCandidate("DoujinishiPattern", safeCircle));
             return results;
         }
 
@@ -120,12 +120,6 @@ public static class IdentifierParser
         }
 
         return results;
-    }
-
-    private static string GenerateShortHash(string input)
-    {
-        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(input));
-        return Convert.ToHexString(bytes)[..8];
     }
 
     private static string NormalizeFanzaId(string raw)
