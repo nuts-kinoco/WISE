@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { ArrowLeft, FolderOpen, ShieldAlert, Loader2, HardDriveUpload, Plus, Trash2, Power, PowerOff, CheckCircle2, Play, AlertCircle, FilePlus, Copy, FolderInput, XCircle, RefreshCw } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { ArrowLeft, FolderOpen, ShieldAlert, Loader2, HardDriveUpload, Plus, Trash2, Power, PowerOff, CheckCircle2, Play, AlertCircle, FilePlus, Copy, FolderInput, XCircle, RefreshCw, ChevronsUpDown, ChevronUp, ChevronDown, ScanLine } from "lucide-react";
 import Link from "next/link";
-import { API_BASE_URL } from "@/lib/api";
+import { API_BASE_URL, openSystemPath } from "@/lib/api";
 
 interface WatchFolder {
   id: string;
@@ -49,16 +49,32 @@ export default function ImportPage() {
   const [analyzeResult, setAnalyzeResult] = useState<AnalyzeResult | null>(null);
   
   const [isExecuting, setIsExecuting] = useState(false);
+  const [browsingInput, setBrowsingInput] = useState(false);
+  const [browsingOutput, setBrowsingOutput] = useState(false);
+  const [excludedPaths, setExcludedPaths] = useState<Set<string>>(new Set());
+  const [sortKey, setSortKey] = useState<"fileName" | "identifier" | "status" | null>(null);
+  const [sortAsc, setSortAsc] = useState(true);
   
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
   const [jobProgress, setJobProgress] = useState<JobProgress | null>(null);
   const [isCanceling, setIsCanceling] = useState(false);
-  
+  const importStartTimeRef = useRef<number | null>(null);
+  const [etaText, setEtaText] = useState<string | null>(null);
+  const [activeJobs, setActiveJobs] = useState<{ id: string; jobType: string; status: string; totalCount: number; processedCount: number }[]>([]);
+
   const [error, setError] = useState("");
 
   useEffect(() => {
+    setInputDirectory(localStorage.getItem("import_inputDir") ?? "");
+    setOutputDirectory(localStorage.getItem("import_outputDir") ?? "D:\\WISE_Library");
+    setImportMode((localStorage.getItem("import_mode") as "Move" | "Copy") ?? "Copy");
     fetchWatchFolders();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => { localStorage.setItem("import_inputDir", inputDirectory); }, [inputDirectory]);
+  useEffect(() => { localStorage.setItem("import_outputDir", outputDirectory); }, [outputDirectory]);
+  useEffect(() => { localStorage.setItem("import_mode", importMode); }, [importMode]);
 
   useEffect(() => {
     let intervalId: NodeJS.Timeout;
@@ -69,19 +85,57 @@ export default function ImportPage() {
           if (res.ok) {
             const data = await res.json();
             setJobProgress(data);
-            
+
+            // ETA calculation
+            if (importStartTimeRef.current !== null && data.totalCount > 0) {
+              const ratio = data.processedCount / data.totalCount;
+              if (ratio > 0.05) {
+                const elapsedMs = Date.now() - importStartTimeRef.current;
+                const totalEstimatedMs = elapsedMs / ratio;
+                const remainingMs = totalEstimatedMs - elapsedMs;
+                if (remainingMs > 0) {
+                  const secs = Math.round(remainingMs / 1000);
+                  if (secs < 60) {
+                    setEtaText(`約 ${secs} 秒`);
+                  } else {
+                    const m = Math.floor(secs / 60);
+                    const s = secs % 60;
+                    setEtaText(s > 0 ? `約 ${m} 分 ${s} 秒` : `約 ${m} 分`);
+                  }
+                } else {
+                  setEtaText(null);
+                }
+              } else {
+                setEtaText(null);
+              }
+            }
+
             if (data.status === "Completed") {
               setStep(4);
+              importStartTimeRef.current = null;
+              setEtaText(null);
             } else if (data.status === "Failed" || data.status === "Canceled") {
-              // Stay on step 3 but show error
+              importStartTimeRef.current = null;
+              setEtaText(null);
             }
           }
         } catch (err) {
           console.error("Failed to fetch job status", err);
         }
+
+        // Also poll active jobs for scan status chip (step 3 only after import job moves on)
+        try {
+          const res2 = await fetch(`${API_BASE_URL}/jobs/active`);
+          if (res2.ok) {
+            const jobs = await res2.json();
+            setActiveJobs(jobs.filter((j: any) => j.jobType === "FetchMetadata" || j.jobType === "fetchmetadata"));
+          }
+        } catch {
+          // ignore
+        }
       }, 1000);
     }
-    
+
     return () => {
       if (intervalId) clearInterval(intervalId);
     };
@@ -133,6 +187,26 @@ export default function ImportPage() {
     }
   };
 
+  const browseFolder = async (
+    setter: (path: string) => void,
+    setBrowsing: (v: boolean) => void,
+    currentPath?: string
+  ) => {
+    setBrowsing(true);
+    try {
+      const params = currentPath ? `?initialPath=${encodeURIComponent(currentPath)}` : "";
+      const res = await fetch(`${API_BASE_URL}/system/browse-folder${params}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (!data.cancelled && data.path) setter(data.path);
+      }
+    } catch (err) {
+      console.error("Browse folder failed", err);
+    } finally {
+      setBrowsing(false);
+    }
+  };
+
   const handleAnalyze = async () => {
     if (!inputDirectory) return;
     setIsAnalyzing(true);
@@ -170,7 +244,10 @@ export default function ImportPage() {
         body: JSON.stringify({
           jobType: "Import",
           payload: {
-            inputFolders: [inputDirectory],
+            inputFolders: excludedPaths.size === 0 ? [inputDirectory] : [],
+            inputFiles: excludedPaths.size > 0
+              ? activeCandidates.map(c => c.filePath)
+              : undefined,
             outputFolder: outputDirectory,
             importMode: importMode
           }
@@ -183,6 +260,8 @@ export default function ImportPage() {
       
       const data = await res.json();
       setCurrentJobId(data.jobId);
+      importStartTimeRef.current = Date.now();
+      setEtaText(null);
       setJobProgress({
         id: data.jobId,
         jobType: "Import",
@@ -215,9 +294,36 @@ export default function ImportPage() {
     }
   };
 
-  const newCount = analyzeResult?.candidates.filter(c => !c.isExisting && c.extractedIdentifier).length || 0;
-  const duplicateCount = analyzeResult?.candidates.filter(c => c.isExisting).length || 0;
-  const unknownCount = analyzeResult?.candidates.filter(c => !c.extractedIdentifier).length || 0;
+  const toggleExclude = (filePath: string) => {
+    setExcludedPaths(prev => {
+      const next = new Set(prev);
+      if (next.has(filePath)) next.delete(filePath);
+      else next.add(filePath);
+      return next;
+    });
+  };
+
+  const handleSort = (key: typeof sortKey) => {
+    if (sortKey === key) setSortAsc(v => !v);
+    else { setSortKey(key); setSortAsc(true); }
+  };
+
+  const statusOrder = (c: AnalyzeResult["candidates"][0]) =>
+    !c.extractedIdentifier ? 2 : c.isExisting ? 1 : 0;
+
+  const sortedCandidates = analyzeResult ? [...analyzeResult.candidates].sort((a, b) => {
+    if (!sortKey) return 0;
+    let cmp = 0;
+    if (sortKey === "fileName") cmp = a.fileName.localeCompare(b.fileName);
+    else if (sortKey === "identifier") cmp = (a.extractedIdentifier ?? "").localeCompare(b.extractedIdentifier ?? "");
+    else if (sortKey === "status") cmp = statusOrder(a) - statusOrder(b);
+    return sortAsc ? cmp : -cmp;
+  }) : [];
+
+  const activeCandidates = sortedCandidates.filter(c => !excludedPaths.has(c.filePath));
+  const newCount = activeCandidates.filter(c => !c.isExisting && c.extractedIdentifier).length;
+  const duplicateCount = activeCandidates.filter(c => c.isExisting).length;
+  const unknownCount = activeCandidates.filter(c => !c.extractedIdentifier).length;
 
   // Parse result payload if completed
   let finalResult = null;
@@ -274,22 +380,31 @@ export default function ImportPage() {
               <div className="space-y-2">
                 {watchFolders.map(folder => (
                   <div key={folder.id} className="flex items-center justify-between p-3 border rounded-xl bg-background/50">
-                    <div className="flex items-center gap-3">
-                      <button 
+                    <div className="flex items-center gap-3 min-w-0">
+                      <button
                         onClick={() => handleToggleWatchFolder(folder.id)}
-                        className={`p-1.5 rounded-md transition-colors ${folder.isEnabled ? 'bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
+                        className={`p-1.5 rounded-md transition-colors shrink-0 ${folder.isEnabled ? 'bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
                         title={folder.isEnabled ? "Disable" : "Enable"}
                       >
                         {folder.isEnabled ? <Power className="w-4 h-4" /> : <PowerOff className="w-4 h-4" />}
                       </button>
-                      <span className={`font-mono text-sm ${!folder.isEnabled && 'text-muted-foreground line-through'}`}>{folder.path}</span>
+                      <span className={`font-mono text-sm truncate ${!folder.isEnabled && 'text-muted-foreground line-through'}`}>{folder.path}</span>
                     </div>
-                    <button 
-                      onClick={() => handleDeleteWatchFolder(folder.id)}
-                      className="p-1.5 text-destructive/70 hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={() => openSystemPath(folder.path).catch(() => {})}
+                        className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-md transition-colors"
+                        title="エクスプローラーで開く"
+                      >
+                        <FolderOpen className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteWatchFolder(folder.id)}
+                        className="p-1.5 text-destructive/70 hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                 ))}
                 {watchFolders.length === 0 && (
@@ -311,24 +426,46 @@ export default function ImportPage() {
               <div className="space-y-5">
                 <div>
                   <label className="block text-sm font-semibold mb-1.5 text-foreground/80">Input Directory</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. C:\Downloads"
-                    value={inputDirectory}
-                    onChange={(e) => setInputDirectory(e.target.value)}
-                    className="w-full h-11 bg-background border rounded-lg px-4 focus:ring-2 focus:ring-primary/50 focus:outline-none"
-                  />
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="e.g. C:\Downloads"
+                      value={inputDirectory}
+                      onChange={(e) => setInputDirectory(e.target.value)}
+                      className="flex-1 h-11 bg-background border rounded-lg px-4 focus:ring-2 focus:ring-primary/50 focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => browseFolder(setInputDirectory, setBrowsingInput, inputDirectory)}
+                      disabled={browsingInput}
+                      title="エクスプローラで選択"
+                      className="h-11 px-3 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 disabled:opacity-50 transition-colors flex items-center gap-1.5 shrink-0"
+                    >
+                      {browsingInput ? <Loader2 className="w-4 h-4 animate-spin" /> : <FolderOpen className="w-4 h-4" />}
+                    </button>
+                  </div>
                 </div>
 
                 <div>
                   <label className="block text-sm font-semibold mb-1.5 text-foreground/80">Output Directory (Library Root)</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. D:\WISE_Library"
-                    value={outputDirectory}
-                    onChange={(e) => setOutputDirectory(e.target.value)}
-                    className="w-full h-11 bg-background border rounded-lg px-4 focus:ring-2 focus:ring-primary/50 focus:outline-none"
-                  />
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="e.g. D:\WISE_Library"
+                      value={outputDirectory}
+                      onChange={(e) => setOutputDirectory(e.target.value)}
+                      className="flex-1 h-11 bg-background border rounded-lg px-4 focus:ring-2 focus:ring-primary/50 focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => browseFolder(setOutputDirectory, setBrowsingOutput, outputDirectory)}
+                      disabled={browsingOutput}
+                      title="エクスプローラで選択"
+                      className="h-11 px-3 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 disabled:opacity-50 transition-colors flex items-center gap-1.5 shrink-0"
+                    >
+                      {browsingOutput ? <Loader2 className="w-4 h-4 animate-spin" /> : <FolderOpen className="w-4 h-4" />}
+                    </button>
+                  </div>
                 </div>
 
                 <div>
@@ -384,7 +521,7 @@ export default function ImportPage() {
         {step === 2 && analyzeResult && (
           <section className="space-y-6">
             <div className="flex items-center gap-4">
-              <button onClick={() => setStep(1)} className="p-2 border rounded-lg hover:bg-muted">
+              <button onClick={() => { setStep(1); setExcludedPaths(new Set()); }} className="p-2 border rounded-lg hover:bg-muted">
                 <ArrowLeft className="w-5 h-5" />
               </button>
               <h2 className="text-2xl font-bold">Analyze Result</h2>
@@ -417,34 +554,47 @@ export default function ImportPage() {
 
             <div className="bg-card border rounded-xl overflow-hidden">
               <div className="px-4 py-3 border-b bg-muted/30 font-semibold text-sm flex">
-                <div className="flex-1">File Name</div>
-                <div className="w-40">Identifier</div>
-                <div className="w-32">Status</div>
+                <div className="w-8 shrink-0" />
+                <SortHeader label="File Name" col="fileName" sortKey={sortKey} sortAsc={sortAsc} onSort={handleSort} className="flex-1" />
+                <SortHeader label="Identifier" col="identifier" sortKey={sortKey} sortAsc={sortAsc} onSort={handleSort} className="w-40" />
+                <SortHeader label="Status" col="status" sortKey={sortKey} sortAsc={sortAsc} onSort={handleSort} className="w-32" />
               </div>
               <div className="max-h-[400px] overflow-y-auto divide-y">
-                {analyzeResult.candidates.map((c, i) => (
-                  <div key={i} className="px-4 py-3 text-sm flex items-center hover:bg-muted/10 transition-colors">
-                    <div className="flex-1 font-mono truncate mr-4" title={c.fileName}>{c.fileName}</div>
-                    <div className="w-40 font-bold">
-                      {c.extractedIdentifier ? c.extractedIdentifier : <span className="text-muted-foreground italic">Unknown</span>}
+                {sortedCandidates.map((c, i) => {
+                  const excluded = excludedPaths.has(c.filePath);
+                  return (
+                    <div key={i} className={`px-4 py-3 text-sm flex items-center transition-colors ${excluded ? "opacity-40 bg-muted/20" : "hover:bg-muted/10"}`}>
+                      <div className="w-8 shrink-0">
+                        <button
+                          onClick={() => toggleExclude(c.filePath)}
+                          title={excluded ? "除外を解除" : "インポートから除外"}
+                          className={`w-5 h-5 rounded flex items-center justify-center transition-colors ${excluded ? "bg-muted text-muted-foreground hover:bg-emerald-500/20 hover:text-emerald-500" : "text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10"}`}
+                        >
+                          {excluded ? <Plus className="w-3 h-3" /> : <XCircle className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
+                      <div className={`flex-1 font-mono truncate mr-4 ${excluded ? "line-through" : ""}`} title={c.fileName}>{c.fileName}</div>
+                      <div className="w-40 font-bold">
+                        {c.extractedIdentifier ? c.extractedIdentifier : <span className="text-muted-foreground italic">Unknown</span>}
+                      </div>
+                      <div className="w-32">
+                        {!c.extractedIdentifier ? (
+                          <span className="px-2 py-1 rounded-md bg-rose-500/10 text-rose-600 dark:text-rose-400 font-medium text-xs flex items-center gap-1.5 w-fit">
+                            <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span> Unknown
+                          </span>
+                        ) : c.isExisting ? (
+                          <span className="px-2 py-1 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 font-medium text-xs flex items-center gap-1.5 w-fit">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span> Duplicate
+                          </span>
+                        ) : (
+                          <span className="px-2 py-1 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-medium text-xs flex items-center gap-1.5 w-fit">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> New
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <div className="w-32">
-                      {!c.extractedIdentifier ? (
-                        <span className="px-2 py-1 rounded-md bg-rose-500/10 text-rose-600 dark:text-rose-400 font-medium text-xs flex items-center gap-1.5 w-fit">
-                          <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span> Unknown
-                        </span>
-                      ) : c.isExisting ? (
-                        <span className="px-2 py-1 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 font-medium text-xs flex items-center gap-1.5 w-fit">
-                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span> Duplicate
-                        </span>
-                      ) : (
-                        <span className="px-2 py-1 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-medium text-xs flex items-center gap-1.5 w-fit">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> New
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
                 {analyzeResult.candidates.length === 0 && (
                   <div className="py-10 text-center text-muted-foreground text-sm">
                     No supported media files found in the directory.
@@ -456,7 +606,7 @@ export default function ImportPage() {
             <div className="flex flex-col items-center pt-6">
               <button
                 onClick={handleExecute}
-                disabled={isExecuting || analyzeResult.totalFiles === 0}
+                disabled={isExecuting || activeCandidates.length === 0}
                 className="h-14 px-10 text-lg bg-primary text-primary-foreground font-bold rounded-xl hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3 transition-colors shadow-lg shadow-primary/20"
               >
                 {isExecuting ? <Loader2 className="w-6 h-6 animate-spin" /> : <HardDriveUpload className="w-6 h-6" />}
@@ -497,16 +647,35 @@ export default function ImportPage() {
 
             {(jobProgress.status === "Running" || jobProgress.status === "Created" || jobProgress.status === "Queued") && (
               <div className="w-full max-w-md space-y-4 mb-8">
-                <div className="flex justify-between text-sm font-medium">
-                  <span>Progress</span>
-                  <span>{jobProgress.processedCount} / {Math.max(jobProgress.totalCount, analyzeResult?.totalFiles || 0)} files</span>
-                </div>
-                <div className="w-full bg-muted rounded-full h-3 overflow-hidden">
-                  <div 
-                    className="bg-primary h-3 rounded-full transition-all duration-500 ease-out"
-                    style={{ width: `${Math.max(0, Math.min(100, (jobProgress.processedCount / Math.max(1, jobProgress.totalCount || analyzeResult?.totalFiles || 1)) * 100))}%` }}
-                  ></div>
-                </div>
+                {(() => {
+                  const total = Math.max(jobProgress.totalCount, analyzeResult?.totalFiles || 0);
+                  const pct = total > 0 ? Math.max(0, Math.min(100, Math.round((jobProgress.processedCount / total) * 100))) : 0;
+                  return (
+                    <>
+                      <div className="flex justify-between text-sm font-medium">
+                        <span>Progress</span>
+                        <span>{jobProgress.processedCount} / {total} 件完了 ({pct}%)</span>
+                      </div>
+                      <div className="w-full bg-muted rounded-full h-3 overflow-hidden">
+                        <div
+                          className="bg-primary h-3 rounded-full transition-all duration-500 ease-out"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                      {etaText && (
+                        <p className="text-sm text-muted-foreground text-center">残り{etaText}</p>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+            )}
+
+            {/* Scan status chip — shown when metadata jobs are running */}
+            {activeJobs.length > 0 && (
+              <div className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-lg text-sm font-medium mb-6">
+                <ScanLine className="w-4 h-4 animate-pulse" />
+                スキャン中: {activeJobs.reduce((s, j) => s + j.processedCount, 0)} / {activeJobs.reduce((s, j) => s + j.totalCount, 0)} 件
               </div>
             )}
 
@@ -593,5 +762,29 @@ export default function ImportPage() {
 
       </div>
     </main>
+  );
+}
+
+function SortHeader({
+  label, col, sortKey, sortAsc, onSort, className,
+}: {
+  label: string;
+  col: "fileName" | "identifier" | "status";
+  sortKey: "fileName" | "identifier" | "status" | null;
+  sortAsc: boolean;
+  onSort: (col: "fileName" | "identifier" | "status") => void;
+  className?: string;
+}) {
+  const active = sortKey === col;
+  return (
+    <button
+      onClick={() => onSort(col)}
+      className={`flex items-center gap-1 hover:text-foreground transition-colors text-left ${active ? "text-foreground" : "text-muted-foreground"} ${className ?? ""}`}
+    >
+      {label}
+      {active
+        ? sortAsc ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />
+        : <ChevronsUpDown className="w-3.5 h-3.5 opacity-40" />}
+    </button>
   );
 }
