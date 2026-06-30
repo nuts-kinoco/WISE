@@ -365,12 +365,13 @@ export default function ReaderPage({ params }: { params: Promise<{ id: string }>
       )}
 
       {/* ── Page display area ── */}
-      <div className="flex-1 flex items-center justify-center overflow-hidden">
-        <div className={`flex h-full w-full max-h-screen ${pageMode === "double" ? "" : "justify-center"}`}>
+      <div className="flex-1 overflow-hidden bg-black">
+        {/* 2P: grid で厳密に50/50分割 — flex+w-[50vw]はサブピクセル境界で白線が出る */}
+        <div className={`h-full w-full ${pageMode === "double" ? "grid grid-cols-2" : "flex items-center justify-center"}`}>
           {pageIndexes.map((pi) => (
             <div
               key={pi}
-              className={`relative ${pageMode === "double" ? "w-[50vw]" : "max-w-[100vh] w-screen"} h-screen`}
+              className={`relative bg-black ${pageMode === "double" ? "h-full" : "max-w-[100vh] w-screen h-full"}`}
             >
               <Image
                 key={getReaderPageUrl(id, pi)}
