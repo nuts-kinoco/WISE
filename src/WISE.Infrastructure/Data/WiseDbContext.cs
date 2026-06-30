@@ -238,12 +238,18 @@ public class WiseDbContext : DbContext, IUnitOfWork
     {
         // Fix for EF Core incorrectly marking new child entities with generated GUIDs as Modified
         var modifiedEntries = ChangeTracker.Entries()
-            .Where(e => e.State == EntityState.Modified && (e.Entity is Asset || e.Entity is MetadataField))
+            .Where(e => e.State == EntityState.Modified && (e.Entity is Work || e.Entity is Asset || e.Entity is MetadataField))
             .ToList();
 
         foreach (var entry in modifiedEntries)
         {
-            if (entry.Entity is Asset asset)
+            if (entry.Entity is Work work)
+            {
+                bool exists = await Works.AsNoTracking().AnyAsync(w => w.Id == work.Id, cancellationToken);
+                if (!exists)
+                    entry.State = EntityState.Added;
+            }
+            else if (entry.Entity is Asset asset)
             {
                 bool exists = await Assets.AsNoTracking().AnyAsync(a => a.Id == asset.Id, cancellationToken);
                 if (!exists)

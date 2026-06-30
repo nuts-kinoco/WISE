@@ -167,7 +167,9 @@ public class ExecuteImportJobUseCase
             // --- 6. Asset 追加 ---
             if (!work.Assets.Any(a => a.FilePath == finalFilePath))
             {
-                var asset = new Asset(finalFilePath, fileName, fileInfo.Length, "sha256-pending");
+                var (primaryRole, primaryFormat) = InferAssetRoleAndFormat(finalFilePath);
+                var asset = new Asset(finalFilePath, fileName, fileInfo.Length, "sha256-pending",
+                    role: primaryRole, storageFormat: primaryFormat);
                 work.AddAsset(asset);
                 addedAssetsCount++;
 
@@ -237,6 +239,25 @@ public class ExecuteImportJobUseCase
             ".pdf" => MediaType.Book,
             ".jpg" or ".jpeg" or ".png" or ".webp" => MediaType.PhotoBook,
             _ => MediaType.Video
+        };
+    }
+
+    private static (AssetRole role, StorageFormat format) InferAssetRoleAndFormat(string filePath)
+    {
+        var ext = Path.GetExtension(filePath).ToLowerInvariant();
+        return ext switch
+        {
+            ".mp4" or ".mkv" or ".avi" or ".wmv" or ".mov" or ".m4v"
+                => (AssetRole.Video, StorageFormat.SingleFile),
+            ".zip" or ".cbz" or ".rar" or ".cbr" or ".7z"
+                => (AssetRole.Archive, StorageFormat.Archive),
+            ".epub"
+                => (AssetRole.Archive, StorageFormat.Epub),
+            ".pdf"
+                => (AssetRole.Archive, StorageFormat.Pdf),
+            ".jpg" or ".jpeg" or ".png" or ".webp" or ".gif"
+                => (AssetRole.Image, StorageFormat.SingleFile),
+            _ => (AssetRole.Unknown, StorageFormat.SingleFile)
         };
     }
 }
