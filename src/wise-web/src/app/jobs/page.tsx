@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { ArrowLeft, HardDriveUpload, CheckCircle2, XCircle, Clock, Loader2, Play, ChevronDown, ChevronUp, AlertCircle, RefreshCw, StopCircle } from "lucide-react";
 import Link from "next/link";
 import { API_BASE_URL } from "@/lib/api";
+import { formatDateTime, formatTime } from "@/lib/dateUtils";
 
 interface Job {
   id: string;
@@ -159,9 +160,9 @@ export default function JobsPage() {
                       </div>
                     )}
                     <div className="text-xs text-muted-foreground">
-                      Created: {new Date(job.createdAt).toLocaleString()}
-                      {job.startedAt && ` • Started: ${new Date(job.startedAt).toLocaleTimeString()}`}
-                      {job.finishedAt && ` • Finished: ${new Date(job.finishedAt).toLocaleTimeString()}`}
+                      Created: {formatDateTime(job.createdAt)}
+                      {job.startedAt && ` • Started: ${formatTime(job.startedAt)}`}
+                      {job.finishedAt && ` • Finished: ${formatTime(job.finishedAt)}`}
                     </div>
                   </div>
 

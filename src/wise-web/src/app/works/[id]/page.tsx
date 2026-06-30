@@ -6,6 +6,7 @@ import { DashboardCard } from "@/components/dashboard/DashboardCard";
 import { resolveCoverUrl } from "@/lib/media";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Loader2, ChevronDown, ChevronUp, Calendar, Clock, Building2, Tag, Film, Layers, Trash2, Heart, Star, RefreshCw, FolderOpen, Upload, Pencil, X, Plus, CheckCircle2, AlertCircle, History, BookOpen } from "lucide-react";
+import { formatDateTime } from "@/lib/dateUtils";
 import { Skeleton } from "@/components/ui/Skeleton";
 import Image from "next/image";
 import Link from "next/link";
@@ -49,6 +50,7 @@ export default function WorkDetailPage({ params }: { params: Promise<{ id: strin
   const [memo, setMemo] = useState<string>("");
   const [sampleIdx, setSampleIdx] = useState(0);
   const [videoTabIdx, setVideoTabIdx] = useState(0);
+  const [historyExpanded, setHistoryExpanded] = useState(false);
   const [rescraping, setRescraping] = useState(false);
   const [rescrapeMsg, setRescrapeMsg] = useState<string | null>(null);
   const [openingFolder, setOpeningFolder] = useState(false);
@@ -894,23 +896,31 @@ export default function WorkDetailPage({ params }: { params: Promise<{ id: strin
               {/* History Timeline */}
               {work.history.length > 0 && (
                 <div>
-                  <div className="flex items-center gap-1.5 mb-3">
+                  <button
+                    onClick={() => setHistoryExpanded(v => !v)}
+                    className="flex items-center gap-1.5 mb-3 w-full text-left hover:opacity-80 transition-opacity"
+                  >
                     <History className="w-3.5 h-3.5 text-muted-foreground" />
-                    <p className="text-xs text-muted-foreground uppercase tracking-wider">履歴</p>
-                  </div>
-                  <ol className="relative border-l border-border/40 space-y-3 pl-4">
-                    {work.history.map((h, i) => (
-                      <li key={i} className="relative">
-                        <span className="absolute -left-[17px] top-1 w-2.5 h-2.5 rounded-full bg-primary/30 border border-primary/50" />
-                        <p className="text-sm font-medium text-foreground/90 leading-snug">
-                          {EVENT_LABELS[h.eventType] ?? h.eventType}
-                        </p>
-                        <time className="text-[11px] text-muted-foreground">
-                          {new Date(h.occurredAt).toLocaleString("ja-JP")}
-                        </time>
-                      </li>
-                    ))}
-                  </ol>
+                    <p className="text-xs text-muted-foreground uppercase tracking-wider flex-1">履歴</p>
+                    {historyExpanded
+                      ? <ChevronUp className="w-3 h-3 text-muted-foreground" />
+                      : <ChevronDown className="w-3 h-3 text-muted-foreground" />}
+                  </button>
+                  {historyExpanded && (
+                    <ol className="relative border-l border-border/40 space-y-3 pl-4">
+                      {work.history.map((h, i) => (
+                        <li key={i} className="relative">
+                          <span className="absolute -left-[17px] top-1 w-2.5 h-2.5 rounded-full bg-primary/30 border border-primary/50" />
+                          <p className="text-sm font-medium text-foreground/90 leading-snug">
+                            {EVENT_LABELS[h.eventType] ?? h.eventType}
+                          </p>
+                          <time className="text-[11px] text-muted-foreground">
+                            {formatDateTime(h.occurredAt)}
+                          </time>
+                        </li>
+                      ))}
+                    </ol>
+                  )}
                 </div>
               )}
 
@@ -980,7 +990,7 @@ export default function WorkDetailPage({ params }: { params: Promise<{ id: strin
                           {work.history.map((h, i) => (
                             <div key={i} className="text-xs border-l-2 border-primary/30 pl-3">
                               <div className="flex items-center gap-2 text-muted-foreground mb-0.5">
-                                <span className="font-mono">{new Date(h.occurredAt).toLocaleString("ja-JP")}</span>
+                                <span className="font-mono">{formatDateTime(h.occurredAt)}</span>
                               </div>
                               <p className="font-medium text-foreground/90">
                                 {EVENT_LABELS[h.eventType] ?? h.eventType}

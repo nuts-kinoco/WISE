@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using WISE.Application.DTOs;
 using WISE.Domain.Entities;
+using WISE.Domain.Enums;
 using WISE.Domain.Interfaces;
 using WISE.Infrastructure.Data;
 
@@ -147,7 +148,7 @@ public class ExecuteImportJobUseCase
 
             if (work == null)
             {
-                work = new Work(identifier);
+                work = new Work(identifier, InferMediaType(finalFilePath));
                 _dbContext.Works.Add(work);
                 newWorksCache[identifier] = work;
                 addedWorksCount++;
@@ -210,6 +211,7 @@ public class ExecuteImportJobUseCase
             {
                 var payload = JsonSerializer.Serialize(new { WorkId = w.Id });
                 var metadataJob = new Job("FetchMetadata", $"Work_{w.Id}", payload);
+                metadataJob.MarkAsQueued();
                 _dbContext.Jobs.Add(metadataJob);
             }
         }
@@ -221,6 +223,20 @@ public class ExecuteImportJobUseCase
             WorksAdded = addedWorksCount,
             AssetsAdded = addedAssetsCount,
             DuplicatesMerged = duplicatesMergedCount
+        };
+    }
+
+    private static MediaType InferMediaType(string filePath)
+    {
+        var ext = Path.GetExtension(filePath).ToLowerInvariant();
+        return ext switch
+        {
+            ".mp4" or ".mkv" or ".avi" or ".wmv" or ".mov" or ".m4v" => MediaType.Video,
+            ".zip" or ".cbz" or ".rar" or ".cbr" or ".7z" => MediaType.Comic,
+            ".epub" => MediaType.Book,
+            ".pdf" => MediaType.Book,
+            ".jpg" or ".jpeg" or ".png" or ".webp" => MediaType.PhotoBook,
+            _ => MediaType.Video
         };
     }
 }

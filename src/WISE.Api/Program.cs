@@ -112,6 +112,7 @@ builder.Services.AddScoped<ICoverProviderChain, CoverProviderChain>();
 builder.Services.AddScoped<ICoverProvider, AssetCoverProvider>();
 builder.Services.AddScoped<ICoverProvider, EpubCoverProvider>();
 builder.Services.AddScoped<ICoverProvider, ArchiveCoverProvider>();
+builder.Services.AddScoped<ICoverProvider, SampleImageCoverProvider>();
 builder.Services.AddScoped<ICoverProvider, VideoThumbnailCoverProvider>();
 builder.Services.AddScoped<ICoverProvider, DefaultCoverProvider>();
 builder.Services.AddScoped<FFmpegThumbnailService>();

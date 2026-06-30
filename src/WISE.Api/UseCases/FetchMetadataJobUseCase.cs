@@ -156,12 +156,13 @@ public class FetchMetadataJobUseCase
                         }
 
                         var assetType = fieldName == "LandscapeCover" ? AssetType.LandscapeCover : AssetType.PortraitCover;
+                        var assetRole = fieldName == "LandscapeCover" ? AssetRole.CoverLandscape : AssetRole.CoverPortrait;
                         var existingCoverAsset = work.Assets.FirstOrDefault(a =>
                             string.Equals(a.FilePath, localPath, StringComparison.OrdinalIgnoreCase));
                         var assetId = existingCoverAsset?.Id ?? Guid.NewGuid();
                         if (existingCoverAsset == null)
                         {
-                            var coverAsset = new Asset(localPath, fileName, new FileInfo(localPath).Length, null, assetId, assetType);
+                            var coverAsset = new Asset(localPath, fileName, new FileInfo(localPath).Length, null, assetId, assetType, assetRole);
                             work.AddAsset(coverAsset);
                         }
 
@@ -208,6 +209,7 @@ public class FetchMetadataJobUseCase
             var sampleCandidates = resolvedCandidates
                 .Where(c => c.Candidate.FieldName == "SampleImage"
                          && c.Candidate.Value.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+                .DistinctBy(c => c.Candidate.Value)
                 .Take(MaxSamples)
                 .ToList();
 
@@ -233,7 +235,7 @@ public class FetchMetadataJobUseCase
                         string.Equals(a.FilePath, samplePath, StringComparison.OrdinalIgnoreCase));
                     var sampleAssetId = existingSample?.Id ?? Guid.NewGuid();
                     if (existingSample == null)
-                        work.AddAsset(new Asset(samplePath, sampleFileName, new FileInfo(samplePath).Length, null, sampleAssetId, AssetType.SampleImage));
+                        work.AddAsset(new Asset(samplePath, sampleFileName, new FileInfo(samplePath).Length, null, sampleAssetId, AssetType.SampleImage, AssetRole.Sample));
 
                     var sampleApiUrl = $"/api/assets/{sampleAssetId}/content";
                     downloadedSampleUrls.Add(sampleApiUrl);

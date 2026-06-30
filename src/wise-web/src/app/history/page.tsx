@@ -5,6 +5,7 @@ import { ArrowLeft, Activity, Image as ImageIcon, Database, FolderPlus, Tag, Tra
 import Link from "next/link";
 import { API_BASE_URL } from "@/lib/api";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { parseUtcDate } from "@/lib/dateUtils";
 
 interface HistoryDto {
   id: string;
@@ -63,28 +64,34 @@ function iconOf(eventType: string) {
 // ── Date helpers ───────────────────────────────────────────────────────────────
 
 function dateGroupKey(iso: string): string {
-  return iso.slice(0, 10); // YYYY-MM-DD
+  // parse as UTC then take the local date portion for grouping
+  const d = parseUtcDate(iso);
+  return d.toLocaleDateString("ja-JP", { year: "numeric", month: "2-digit", day: "2-digit" });
 }
 
 function formatDateGroup(key: string): string {
-  const d = new Date(key);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const yesterday = new Date(today);
   yesterday.setDate(today.getDate() - 1);
+
+  // key is a locale date string — compare via today/yesterday strings
+  const todayKey = today.toLocaleDateString("ja-JP", { year: "numeric", month: "2-digit", day: "2-digit" });
+  const yesterdayKey = yesterday.toLocaleDateString("ja-JP", { year: "numeric", month: "2-digit", day: "2-digit" });
+
+  if (key === todayKey) return "今日";
+  if (key === yesterdayKey) return "昨日";
+
+  // Parse the key back to compute diffDays
   const target = new Date(key);
-
-  if (target.getTime() === today.getTime()) return "今日";
-  if (target.getTime() === yesterday.getTime()) return "昨日";
-
   const diffDays = Math.floor((today.getTime() - target.getTime()) / 86400000);
-  if (diffDays < 7) return `${diffDays}日前`;
+  if (diffDays > 0 && diffDays < 7) return `${diffDays}日前`;
 
-  return d.toLocaleDateString("ja-JP", { year: "numeric", month: "long", day: "numeric" });
+  return key;
 }
 
 function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
+  return parseUtcDate(iso).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
 }
 
 // ── Component ──────────────────────────────────────────────────────────────────

@@ -1,4 +1,6 @@
 ﻿using System.Collections.Generic;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.RegularExpressions;
 using WISE.Domain.Models;
 
@@ -37,6 +39,11 @@ public static class IdentifierParser
     // FANZA同人 (例: d_123456, d123456)
     private static readonly Regex FanzaDoujinRegex =
         new(@"\b(d_?\d{5,})\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    // 同人誌標準命名規則: (C107) [サークル名 (作者名)] 題名 (出版社).拡張子
+    // 例: (C107) [ジャックとニコルソン (のりパチ)] たんさく費用の稼ぎ方 (瑠璃の宝石).zip
+    private static readonly Regex DoujinishiRegex =
+        new(@"^\s*\([^)]+\)\s*\[([^\]]+)\]\s*([^([]+)", RegexOptions.Compiled);
 
     /// <summary>
     /// ファイル名から Identifier 候補を全て抽出して返す。
@@ -90,6 +97,21 @@ public static class IdentifierParser
             return results;
         }
 
+        // 同人誌標準命名規則: (Event) [Circle (Author)] Title ...
+        // 汎用商業AVパターンより先に評価（商業識別子のない同人ファイル向け）
+        var doujinMatch = DoujinishiRegex.Match(fileName);
+        if (doujinMatch.Success)
+        {
+            var circle = doujinMatch.Groups[1].Value.Trim();
+            // タイトル部分から拡張子を除去
+            var titleRaw = doujinMatch.Groups[2].Value.Trim();
+            var dotIdx = titleRaw.LastIndexOf('.');
+            var title = dotIdx > 0 ? titleRaw[..dotIdx].Trim() : titleRaw;
+            var stableId = "DOUJIN-" + GenerateShortHash(circle + "|" + title);
+            results.Add(new IdentifierCandidate("DoujinishiPattern", stableId));
+            return results;
+        }
+
         // 汎用商業AV（ホワイトリストなし）
         var commercialMatch = CommercialRegex.Match(fileName);
         if (commercialMatch.Success)
@@ -98,6 +120,12 @@ public static class IdentifierParser
         }
 
         return results;
+    }
+
+    private static string GenerateShortHash(string input)
+    {
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(input));
+        return Convert.ToHexString(bytes)[..8];
     }
 
     private static string NormalizeFanzaId(string raw)
