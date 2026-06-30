@@ -127,6 +127,29 @@ export function getEpubUrl(workId: string): string {
   return `${API_BASE_URL}/works/${workId}/epub`;
 }
 
+// ── Home / Dashboard API ───────────────────────────────────────────────────
+
+export interface HomeData {
+  continueWatching: WorkItem[];
+  recentlyAdded: WorkItem[];
+  favorites: WorkItem[];
+}
+
+export async function fetchHome(deviceId: string): Promise<HomeData> {
+  const res = await fetch(
+    `${API_BASE_URL}/home?deviceId=${encodeURIComponent(deviceId)}`
+  );
+  if (!res.ok) throw new Error('Failed to fetch home data');
+  return res.json();
+}
+
+export async function fetchRandomWork(): Promise<WorkItem | null> {
+  const res = await fetch(`${API_BASE_URL}/home/random`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error('Failed to fetch random work');
+  return res.json();
+}
+
 // ── Viewer Info API ────────────────────────────────────────────────────────
 
 export interface ViewerInfo {

@@ -4,15 +4,18 @@ import { useGalleryStore, type Density, type SortOption } from "@/store/useGalle
 import type { MediaType } from "@/lib/api";
 import { GalleryGrid } from "@/components/gallery/GalleryGrid";
 import { DisplaySettingsPanel } from "@/components/gallery/DisplaySettingsPanel";
+import { DashboardView } from "@/components/dashboard/DashboardView";
 import {
   Search, Moon, Sun, Monitor, Settings2, HardDriveUpload,
   Clock, Activity, RectangleVertical, RectangleHorizontal,
   X, AlertTriangle, TableProperties, Copy, SlidersHorizontal,
-  List, Grid, LayoutGrid, Rows3,
+  List, Grid, LayoutGrid, Rows3, Home as HomeIcon, BookImage,
 } from "lucide-react";
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { JobQueuePanel, TopProgressBar } from "@/components/JobQueuePanel";
+
+type MainView = "home" | "library";
 
 // ── Density mode config ───────────────────────────────────────────────────────
 
@@ -60,6 +63,7 @@ export default function Home() {
 
   const [mounted, setMounted] = useState(false);
   const [showDisplayPanel, setShowDisplayPanel] = useState(false);
+  const [mainView, setMainView] = useState<MainView>("home");
 
   useEffect(() => setMounted(true), []);
 
@@ -76,10 +80,40 @@ export default function Home() {
           {/* Logo */}
           <Link
             href="/"
-            className="flex items-center gap-2 font-bold text-xl mr-4 tracking-wider hover:opacity-80 transition-opacity flex-none"
+            className="flex items-center gap-2 font-bold text-xl tracking-wider hover:opacity-80 transition-opacity flex-none"
           >
             <span className="text-primary">WISE</span>
           </Link>
+
+          {/* Home / Library tab switcher */}
+          {mounted && (
+            <div className="flex items-center gap-0.5 bg-muted/40 rounded-xl p-1 mr-2 flex-none">
+              <button
+                onClick={() => setMainView("home")}
+                title="ホーム"
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-medium transition-colors ${
+                  mainView === "home"
+                    ? "bg-background shadow-sm text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <HomeIcon className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">ホーム</span>
+              </button>
+              <button
+                onClick={() => setMainView("library")}
+                title="ライブラリ"
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-medium transition-colors ${
+                  mainView === "library"
+                    ? "bg-background shadow-sm text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <BookImage className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">ライブラリ</span>
+              </button>
+            </div>
+          )}
 
           {/* Search */}
           <div className="relative flex-1 max-w-2xl">
@@ -202,8 +236,8 @@ export default function Home() {
         </div>
       </header>
 
-      {/* ── MediaType filter tabs + Sort ── */}
-      <div className="w-full border-b border-border/40 bg-background/80 backdrop-blur sticky top-16 z-40">
+      {/* ── MediaType filter tabs + Sort (library mode only) ── */}
+      {mainView === "library" && <div className="w-full border-b border-border/40 bg-background/80 backdrop-blur sticky top-16 z-40">
         <div className="container px-4 md:px-6 flex items-center gap-1 h-10">
           {/* MediaType tabs (scrollable) */}
           <div className="flex items-center gap-1 overflow-x-auto scrollbar-none flex-1 min-w-0">
@@ -239,12 +273,16 @@ export default function Home() {
             </select>
           </div>
         </div>
-      </div>
+      </div>}
 
-      {/* Gallery */}
-      <div className="flex-1 w-full px-4 md:px-6 py-5">
-        <GalleryGrid />
-      </div>
+      {/* Content area */}
+      {mainView === "home" ? (
+        <DashboardView onSwitchToLibrary={() => setMainView("library")} />
+      ) : (
+        <div className="flex-1 w-full px-4 md:px-6 py-5">
+          <GalleryGrid />
+        </div>
+      )}
 
       <JobQueuePanel />
     </main>
