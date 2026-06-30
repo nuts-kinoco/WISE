@@ -35,7 +35,12 @@ public class ExecuteImportJobUseCase
         Action<int, int>? onProgress = null,
         CancellationToken cancellationToken = default)
     {
-        var extensions = new[] { ".mp4", ".mkv", ".avi", ".zip", ".jpg", ".png" };
+        var extensions = new[] {
+            ".mp4", ".mkv", ".avi", ".wmv", ".mov", ".m4v",
+            ".zip", ".cbz", ".rar", ".cbr", ".7z",
+            ".epub", ".pdf",
+            ".jpg", ".jpeg", ".png", ".webp",
+        };
         var files = new List<string>();
 
         foreach (var directoryPath in request.InputFolders)
@@ -54,6 +59,16 @@ public class ExecuteImportJobUseCase
         }
 
         files = files.Distinct().ToList();
+
+        // ノイズファイル除外: 汎用ファイル名は識別子なしのゴミ Work を生成するだけなのでスキップ
+        static bool IsNoiseFile(string path)
+        {
+            var name = Path.GetFileNameWithoutExtension(path).ToLowerInvariant();
+            return name is "movie" or "sample" or "trailer" or "preview"
+                or "thumb" or "thumbs" or "screenshot" or "video"
+                or "main" or "output" or "stream" or "file" or "test";
+        }
+        files = files.Where(f => !IsNoiseFile(f)).ToList();
 
         int addedWorksCount = 0;
         int addedAssetsCount = 0;
@@ -242,6 +257,18 @@ public class ExecuteImportJobUseCase
         };
     }
 
+    private static bool IsCoverFileName(string nameWithoutExtLower)
+    {
+        // 完全一致: cover, front, folder, coverimage, jacket など
+        if (nameWithoutExtLower is "cover" or "cover_image" or "coverimage"
+            or "front" or "front_cover" or "jacket" or "folder" or "thumb")
+            return true;
+        // 前方一致: cover_ / front_ プレフィックス
+        if (nameWithoutExtLower.StartsWith("cover") || nameWithoutExtLower.StartsWith("front"))
+            return true;
+        return false;
+    }
+
     private static (AssetRole role, StorageFormat format) InferAssetRoleAndFormat(string filePath)
     {
         var ext = Path.GetExtension(filePath).ToLowerInvariant();
@@ -260,6 +287,7 @@ public class ExecuteImportJobUseCase
             ".jpg" or ".jpeg" or ".png" or ".webp" or ".gif"
                 => nameWithoutExt.EndsWith("_pl") ? (AssetRole.CoverLandscape, StorageFormat.SingleFile)
                  : nameWithoutExt.EndsWith("_ps") ? (AssetRole.CoverPortrait, StorageFormat.SingleFile)
+                 : IsCoverFileName(nameWithoutExt)  ? (AssetRole.CoverPortrait, StorageFormat.SingleFile)
                  : (AssetRole.Image, StorageFormat.SingleFile),
             _ => (AssetRole.Unknown, StorageFormat.SingleFile)
         };
