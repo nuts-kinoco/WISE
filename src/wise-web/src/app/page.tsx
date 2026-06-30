@@ -1,6 +1,6 @@
 "use client";
 
-import { useGalleryStore, type Density } from "@/store/useGalleryStore";
+import { useGalleryStore, type Density, type SortOption } from "@/store/useGalleryStore";
 import type { MediaType } from "@/lib/api";
 import { GalleryGrid } from "@/components/gallery/GalleryGrid";
 import { DisplaySettingsPanel } from "@/components/gallery/DisplaySettingsPanel";
@@ -35,6 +35,17 @@ const MEDIA_TYPE_TABS: { value: MediaType | null; label: string }[] = [
   { value: "Audio",           label: "音声" },
 ];
 
+// ── Sort options ──────────────────────────────────────────────────────────────
+
+const SORT_OPTIONS: { value: SortOption; label: string }[] = [
+  { value: "added",      label: "追加日（新しい順）" },
+  { value: "rating",     label: "評価順" },
+  { value: "title",      label: "タイトル順" },
+  { value: "identifier", label: "品番順" },
+  { value: "release",    label: "発売日（新しい順）" },
+  { value: "random",     label: "ランダム" },
+];
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function Home() {
@@ -44,6 +55,7 @@ export default function Home() {
     theme, setTheme,
     coverLayout, setCoverLayout,
     mediaTypeFilter, setMediaTypeFilter,
+    sort, setSort,
   } = useGalleryStore();
 
   const [mounted, setMounted] = useState(false);
@@ -190,22 +202,42 @@ export default function Home() {
         </div>
       </header>
 
-      {/* ── MediaType filter tabs ── */}
+      {/* ── MediaType filter tabs + Sort ── */}
       <div className="w-full border-b border-border/40 bg-background/80 backdrop-blur sticky top-16 z-40">
-        <div className="container px-4 md:px-6 flex items-center gap-1 overflow-x-auto scrollbar-none h-10">
-          {MEDIA_TYPE_TABS.map(({ value, label }) => (
-            <button
-              key={value ?? "all"}
-              onClick={() => setMediaTypeFilter(value)}
-              className={`flex-none px-3 py-1.5 rounded-lg text-[13px] font-medium transition-colors
-                ${mediaTypeFilter === value
-                  ? "bg-primary/10 text-primary"
-                  : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                }`}
+        <div className="container px-4 md:px-6 flex items-center gap-1 h-10">
+          {/* MediaType tabs (scrollable) */}
+          <div className="flex items-center gap-1 overflow-x-auto scrollbar-none flex-1 min-w-0">
+            {MEDIA_TYPE_TABS.map(({ value, label }) => (
+              <button
+                key={value ?? "all"}
+                onClick={() => setMediaTypeFilter(value)}
+                className={`flex-none px-3 py-1.5 rounded-lg text-[13px] font-medium transition-colors
+                  ${mediaTypeFilter === value
+                    ? "bg-primary/10 text-primary"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                  }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {/* Sort selector */}
+          <div className="flex-none border-l border-border/40 pl-3 ml-1">
+            <select
+              value={sort}
+              onChange={(e) => setSort(e.target.value as SortOption)}
+              className="h-7 text-[12px] bg-transparent text-muted-foreground border border-border/50
+                rounded-lg px-2 pr-6 cursor-pointer hover:text-foreground hover:border-border
+                transition-colors focus:outline-none focus:ring-1 focus:ring-primary/30
+                appearance-none"
+              style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23888' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E\")", backgroundRepeat: "no-repeat", backgroundPosition: "right 6px center" }}
             >
-              {label}
-            </button>
-          ))}
+              {SORT_OPTIONS.map(({ value, label }) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 

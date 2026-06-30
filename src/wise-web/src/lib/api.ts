@@ -2,6 +2,8 @@ export const API_BASE_URL = 'http://localhost:5162/api';
 
 export type MediaType = 'Video' | 'Comic' | 'Book' | 'PhotoBook' | 'ImageCollection' | 'Audio';
 
+export type SortOption = 'added' | 'rating' | 'title' | 'identifier' | 'release' | 'random';
+
 export interface WorkItem {
   id: string;
   primaryIdentifier: string | null;
@@ -38,6 +40,7 @@ export async function fetchWorks(
   query = '',
   mediaType?: MediaType | null,
   status?: string,
+  sort?: SortOption | null,
 ): Promise<WorksResponse> {
   const url = new URL(`${API_BASE_URL}/works`);
   url.searchParams.append('page', pageParam.toString());
@@ -45,6 +48,7 @@ export async function fetchWorks(
   if (query) url.searchParams.append('q', query);
   if (mediaType) url.searchParams.append('mediaType', mediaType);
   if (status) url.searchParams.append('status', status);
+  if (sort) url.searchParams.append('sort', sort);
 
   const res = await fetch(url.toString());
   if (!res.ok) throw new Error('Failed to fetch works');

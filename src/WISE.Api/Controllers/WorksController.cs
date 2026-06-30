@@ -38,7 +38,8 @@ namespace WISE.Api.Controllers
             [FromQuery] int pageSize = 50,
             [FromQuery] string? q = null,
             [FromQuery] string? status = null,
-            [FromQuery] string? mediaType = null)
+            [FromQuery] string? mediaType = null,
+            [FromQuery] string? sort = null)
         {
             var query = _dbContext.Works
                 .AsNoTracking()
@@ -82,8 +83,24 @@ namespace WISE.Api.Controllers
             }
 
             var totalCount = await query.CountAsync();
-            var rawWorks = await query
-                .OrderBy(w => w.PrimaryIdentifier)
+
+            IQueryable<WISE.Domain.Entities.Work> sorted = (sort ?? "added") switch
+            {
+                "rating"     => query.OrderByDescending(w => w.Rating == null ? -1 : (double)w.Rating)
+                                     .ThenByDescending(w => w.CreatedAt),
+                "title"      => query.OrderBy(w =>
+                                     w.MetadataFields.Where(m => m.FieldName == "Title" && m.IsPrimary).Select(m => m.Value).FirstOrDefault()
+                                     ?? w.MetadataFields.Where(m => m.FieldName == "Title").Select(m => m.Value).FirstOrDefault()),
+                "identifier" => query.OrderBy(w => w.PrimaryIdentifier),
+                "release"    => query.OrderByDescending(w =>
+                                     w.MetadataFields.Where(m => m.FieldName == "ReleaseDate" && m.IsPrimary).Select(m => m.Value).FirstOrDefault()
+                                     ?? w.MetadataFields.Where(m => m.FieldName == "ReleaseDate" || m.FieldName == "release_date").Select(m => m.Value).FirstOrDefault())
+                                     .ThenByDescending(w => w.CreatedAt),
+                "random"     => query.OrderBy(_ => EF.Functions.Random()),
+                _            => query.OrderByDescending(w => w.CreatedAt), // "added" default
+            };
+
+            var rawWorks = await sorted
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync();

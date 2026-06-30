@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { MediaType } from '@/lib/api';
+import type { MediaType, SortOption } from '@/lib/api';
 
 export type Density = 'compact' | 'normal' | 'rich' | 'list';
 export type CoverLayout = 'portrait' | 'landscape';
@@ -35,6 +35,8 @@ export const DEFAULT_DISPLAY: Record<DisplayField, boolean> = {
   status:      false,
 };
 
+export { type SortOption };
+
 interface GalleryState {
   density: Density;
   setDensity: (d: Density) => void;
@@ -47,6 +49,8 @@ interface GalleryState {
   listSortKey: ListSortKey;
   listSortAsc: boolean;
   setListSort: (key: ListSortKey, asc: boolean) => void;
+  sort: SortOption;
+  setSort: (s: SortOption) => void;
   language: Language;
   setLanguage: (l: Language) => void;
   displayFields: Record<DisplayField, boolean>;
@@ -70,6 +74,8 @@ export const useGalleryStore = create<GalleryState>()(
       listSortKey: 'identifier',
       listSortAsc: true,
       setListSort: (key, asc) => set({ listSortKey: key, listSortAsc: asc }),
+      sort: 'added',
+      setSort: (sort) => set({ sort }),
       language: 'ja',
       setLanguage: (language) => set({ language }),
       displayFields: { ...DEFAULT_DISPLAY },

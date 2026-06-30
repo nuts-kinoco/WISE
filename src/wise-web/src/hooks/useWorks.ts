@@ -17,11 +17,13 @@ function useHasActiveJobs() {
 export function useWorks() {
   const searchQuery = useGalleryStore((state) => state.searchQuery);
   const mediaTypeFilter = useGalleryStore((state) => state.mediaTypeFilter);
+  const sort = useGalleryStore((state) => state.sort);
   const hasActiveJobs = useHasActiveJobs();
 
   return useInfiniteQuery({
-    queryKey: ['works', searchQuery, mediaTypeFilter],
-    queryFn: ({ pageParam = 1 }) => fetchWorks(pageParam as number, 50, searchQuery, mediaTypeFilter),
+    queryKey: ['works', searchQuery, mediaTypeFilter, sort],
+    queryFn: ({ pageParam = 1 }) =>
+      fetchWorks(pageParam as number, 50, searchQuery, mediaTypeFilter, undefined, sort),
     getNextPageParam: (lastPage) => {
       const maxPages = Math.ceil(lastPage.totalCount / lastPage.pageSize);
       return lastPage.page < maxPages ? lastPage.page + 1 : undefined;
