@@ -16,6 +16,7 @@ using WISE.Infrastructure.Data;
 using WISE.Infrastructure.Cover;
 using WISE.Infrastructure.Viewers;
 using WISE.Infrastructure.Services;
+using WISE.Infrastructure.Archive;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -94,9 +95,17 @@ builder.Services.AddScoped<ICoverCacheRepository, WISE.Infrastructure.Data.Repos
 builder.Services.AddScoped<IDisplayProfileRepository, WISE.Infrastructure.Data.Repositories.DisplayProfileRepository>();
 builder.Services.AddScoped<WISE.Domain.SeedWork.IUnitOfWork>(sp => sp.GetRequiredService<WiseDbContext>());
 
+// Archive readers
+builder.Services.AddScoped<IArchiveReader, ZipArchiveReader>();
+builder.Services.AddScoped<IArchiveReader, RarArchiveReader>();
+builder.Services.AddScoped<IArchiveReader, FolderArchiveReader>();
+builder.Services.AddScoped<IArchiveReader, PdfArchiveReader>();
+builder.Services.AddScoped<ArchiveReaderSelector>();
+
 // Cover providers (Chain of Responsibility)
 builder.Services.AddScoped<ICoverProviderChain, CoverProviderChain>();
 builder.Services.AddScoped<ICoverProvider, AssetCoverProvider>();
+builder.Services.AddScoped<ICoverProvider, ArchiveCoverProvider>();
 builder.Services.AddScoped<ICoverProvider, VideoThumbnailCoverProvider>();
 builder.Services.AddScoped<ICoverProvider, DefaultCoverProvider>();
 builder.Services.AddScoped<FFmpegThumbnailService>();
