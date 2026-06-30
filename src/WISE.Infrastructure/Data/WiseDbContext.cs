@@ -17,6 +17,12 @@ public class WiseDbContext : DbContext, IUnitOfWork
     public DbSet<JobLogRecord> JobLogRecords { get; set; } = null!;
     public DbSet<EventLog> EventLogs => Set<EventLog>();
     public DbSet<WatchFolder> WatchFolders { get; set; } = null!;
+    public DbSet<ProviderDiagnostic> ProviderDiagnostics { get; set; } = null!;
+    public DbSet<AppSetting> AppSettings { get; set; } = null!;
+    public DbSet<ReadingHistory> ReadingHistories { get; set; } = null!;
+    public DbSet<CoverCache> CoverCaches { get; set; } = null!;
+    public DbSet<DisplayProfile> DisplayProfiles { get; set; } = null!;
+    public DbSet<DisplayProfileField> DisplayProfileFields { get; set; } = null!;
 
     public WiseDbContext(DbContextOptions<WiseDbContext> options) : base(options)
     {
@@ -61,6 +67,19 @@ public class WiseDbContext : DbContext, IUnitOfWork
         {
             entity.HasKey(e => e.Id);
             entity.HasIndex(e => e.Sha256);
+        });
+
+        modelBuilder.Entity<ProviderDiagnostic>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => e.ProviderId).IsUnique();
+        });
+
+        modelBuilder.Entity<AppSetting>(entity =>
+        {
+            entity.HasKey(e => e.Key);
+            entity.Property(e => e.Key).IsRequired();
+            entity.Property(e => e.Value).IsRequired().HasDefaultValue("");
         });
 
         modelBuilder.Entity<MetadataField>(entity =>
@@ -138,11 +157,91 @@ public class WiseDbContext : DbContext, IUnitOfWork
                   .HasForeignKey(e => e.JobExecutionId)
                   .OnDelete(DeleteBehavior.Cascade);
         });
+
+        modelBuilder.Entity<ReadingHistory>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => new { e.WorkId, e.DeviceId }).IsUnique();
+            entity.HasIndex(e => e.WorkId);
+            entity.HasIndex(e => new { e.DeviceId, e.LastReadAt });
+
+            entity.HasOne(e => e.Work)
+                  .WithMany()
+                  .HasForeignKey(e => e.WorkId)
+                  .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<CoverCache>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => new { e.WorkId, e.ProviderName }).IsUnique();
+            entity.HasIndex(e => e.WorkId);
+
+            entity.HasOne(e => e.Work)
+                  .WithMany()
+                  .HasForeignKey(e => e.WorkId)
+                  .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<DisplayProfile>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => e.MediaType).IsUnique();
+
+            entity.Metadata.FindNavigation(nameof(DisplayProfile.Fields))
+                ?.SetPropertyAccessMode(PropertyAccessMode.Field);
+
+            entity.HasMany(e => e.Fields)
+                  .WithOne(f => f.Profile)
+                  .HasForeignKey(f => f.ProfileId)
+                  .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<DisplayProfileField>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => new { e.ProfileId, e.FieldName }).IsUnique();
+            entity.HasIndex(e => new { e.ProfileId, e.DisplayOrder });
+        });
+    }
+
+    public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        await ApplyEntityStateFixesAsync(cancellationToken);
+        return await base.SaveChangesAsync(cancellationToken);
+    }
+
+    private async Task ApplyEntityStateFixesAsync(CancellationToken cancellationToken)
+    {
+        // Fix for EF Core incorrectly marking new child entities with generated GUIDs as Modified
+        var modifiedEntries = ChangeTracker.Entries()
+            .Where(e => e.State == EntityState.Modified && (e.Entity is Asset || e.Entity is MetadataField))
+            .ToList();
+
+        foreach (var entry in modifiedEntries)
+        {
+            if (entry.Entity is Asset asset)
+            {
+                bool exists = await Assets.AsNoTracking().AnyAsync(a => a.Id == asset.Id, cancellationToken);
+                if (!exists)
+                {
+                    entry.State = EntityState.Added;
+                }
+            }
+            else if (entry.Entity is MetadataField field)
+            {
+                bool exists = await MetadataFields.AsNoTracking().AnyAsync(m => m.Id == field.Id, cancellationToken);
+                if (!exists)
+                {
+                    entry.State = EntityState.Added;
+                }
+            }
+        }
     }
 
     public async Task<bool> SaveEntitiesAsync(CancellationToken cancellationToken = default)
     {
-        // Dispatch Domain Events here in the future
+        await ApplyEntityStateFixesAsync(cancellationToken);
         _ = await base.SaveChangesAsync(cancellationToken);
         return true;
     }

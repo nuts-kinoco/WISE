@@ -11,6 +11,8 @@ using WISE.Infrastructure.Services;
 using WISE.Infrastructure.Providers;
 using WISE.Application.Services;
 using WISE.Api.UseCases;
+using WISE.Infrastructure.Cookies;
+using WISE.Infrastructure.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -22,13 +24,40 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddScoped<ImportUseCase>();
 builder.Services.AddScoped<CreateImportJobUseCase>();
 builder.Services.AddHttpClient();
-builder.Services.AddScoped<IMetadataProvider, JavBusMetadataProvider>();
+
+// Cookie Policies
+builder.Services.AddScoped<ICookiePolicy, WISE.Infrastructure.Cookies.FanzaCookiePolicy>();
+builder.Services.AddScoped<ICookiePolicy, WISE.Infrastructure.Cookies.MgsCookiePolicy>();
+builder.Services.AddScoped<ICookiePolicy, WISE.Infrastructure.Cookies.Fc2CookiePolicy>();
+builder.Services.AddScoped<ICookieProvider, WISE.Infrastructure.Cookies.CookieProvider>();
+
+// Named Options バインディング（appsettings.json の MetadataProviders セクション）
+builder.Services.Configure<WISE.Domain.Models.MetadataProviderOptions>("Fanza",
+    builder.Configuration.GetSection("MetadataProviders:Fanza"));
+builder.Services.Configure<WISE.Domain.Models.MetadataProviderOptions>("Mgs",
+    builder.Configuration.GetSection("MetadataProviders:Mgs"));
+builder.Services.Configure<WISE.Domain.Models.MetadataProviderOptions>("Fc2",
+    builder.Configuration.GetSection("MetadataProviders:Fc2"));
+builder.Services.Configure<WISE.Domain.Models.MetadataProviderOptions>("LocalNfo",
+    builder.Configuration.GetSection("MetadataProviders:LocalNfo"));
+
+// Metadata providers — ConflictResolver が全Providerの結果をマージし、最高信頼度を primary とする
+// Tier1: 公式・販売元（Priority≥70）
+builder.Services.AddScoped<IMetadataProvider, FanzaMetadataProvider>();  // Priority=80
+builder.Services.AddScoped<IMetadataProvider, MgsMetadataProvider>();     // Priority=70（Cookie要。年齢認証が通れば Fanza に次ぐ品質）
+builder.Services.AddScoped<IMetadataProvider, Fc2MetadataProvider>();     // Priority=60（FC2識別子専用）
+// Tier2: フォールバック補完（Priority<70）
+builder.Services.AddScoped<IMetadataProvider, Fc2AltMetadataProvider>(); // Priority=55（FC2削除済みコンテンツ）
+builder.Services.AddScoped<IMetadataProvider, AvWikiMetadataProvider>(); // Priority=60（日本語DB・補完用）
+builder.Services.AddScoped<MetadataService>();
+builder.Services.AddScoped<IMetadataConflictResolver, MetadataConflictResolver>();
 builder.Services.AddSingleton<WISE.Application.Services.IJobCancellationService, WISE.Application.Services.JobCancellationService>();
 builder.Services.AddHostedService<WISE.Api.Services.BackgroundJobWorker>();
 builder.Services.AddHostedService<WISE.Api.Services.WatchFolderMonitorService>();
 builder.Services.AddScoped<WISE.Api.UseCases.ExecuteImportJobUseCase>();
 builder.Services.AddScoped<WISE.Api.UseCases.FetchMetadataJobUseCase>();
 builder.Services.AddSingleton<WISE.Domain.Interfaces.IOutputPathResolver, WISE.Infrastructure.Services.DefaultOutputPathResolver>();
+builder.Services.AddScoped<WISE.Infrastructure.Services.FFmpegThumbnailService>();
 
 // Sprint 13: Evidence-Based Identifier Resolution Pipeline
 // IEvidenceProvider は複数登録可能。将来 PathEvidenceProvider / MetadataHintProvider を追加する場合はここに追記する。
@@ -56,6 +85,11 @@ builder.Services.AddDbContext<WiseDbContext>(options =>
 {
     options.UseSqlite($"Data Source={dbPath}");
 });
+builder.Services.AddScoped<IWorkRepository, WISE.Infrastructure.Data.Repositories.WorkRepository>();
+builder.Services.AddScoped<IReadingHistoryRepository, WISE.Infrastructure.Data.Repositories.ReadingHistoryRepository>();
+builder.Services.AddScoped<ICoverCacheRepository, WISE.Infrastructure.Data.Repositories.CoverCacheRepository>();
+builder.Services.AddScoped<IDisplayProfileRepository, WISE.Infrastructure.Data.Repositories.DisplayProfileRepository>();
+builder.Services.AddScoped<WISE.Domain.SeedWork.IUnitOfWork>(sp => sp.GetRequiredService<WiseDbContext>());
 
 var app = builder.Build();
 
@@ -73,10 +107,16 @@ app.UseAuthorization();
 app.MapControllers();
 
 // Apply migrations and seed data on startup
-using (var scope = app.Services.CreateScope())
+using (var scope = app.Services.CreateAsyncScope())
 {
     var dbContext = scope.ServiceProvider.GetRequiredService<WiseDbContext>();
     dbContext.Database.Migrate();
+    dbContext.Database.ExecuteSqlRaw("PRAGMA journal_mode=WAL;");
+    dbContext.Database.ExecuteSqlRaw(@"
+        CREATE VIRTUAL TABLE IF NOT EXISTS METADATA_FIELD_FTS
+        USING fts5(value, content=METADATA_FIELD, content_rowid=id,
+                   tokenize='unicode61 remove_diacritics 1');");
+    await DisplayProfileSeeder.SeedAsync(dbContext);
 }
 
 app.Run();

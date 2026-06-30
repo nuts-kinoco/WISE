@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using WISE.Infrastructure.Data;
 
@@ -10,9 +11,11 @@ using WISE.Infrastructure.Data;
 namespace WISE.Infrastructure.Migrations
 {
     [DbContext(typeof(WiseDbContext))]
-    partial class WiseDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260628125606_AddAppSettings")]
+    partial class AddAppSettings
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "8.0.6");
@@ -56,18 +59,12 @@ namespace WISE.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<int>("Role")
-                        .HasColumnType("INTEGER");
-
                     b.Property<string>("Sha256")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasColumnType("TEXT");
-
-                    b.Property<int>("StorageFormat")
-                        .HasColumnType("INTEGER");
 
                     b.Property<Guid?>("WorkId")
                         .HasColumnType("TEXT");
@@ -79,110 +76,6 @@ namespace WISE.Infrastructure.Migrations
                     b.HasIndex("WorkId");
 
                     b.ToTable("Assets");
-                });
-
-            modelBuilder.Entity("WISE.Domain.Entities.CoverCache", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("CachedPath")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("ContentType")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime?>("ExpiresAt")
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime>("GeneratedAt")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("ProviderName")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<Guid>("WorkId")
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("WorkId");
-
-                    b.HasIndex("WorkId", "ProviderName")
-                        .IsUnique();
-
-                    b.ToTable("CoverCaches");
-                });
-
-            modelBuilder.Entity("WISE.Domain.Entities.DisplayProfile", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("CoverOrientation")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("DefaultSort")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<bool>("IsUserCustomized")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("MediaType")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("MediaType")
-                        .IsUnique();
-
-                    b.ToTable("DisplayProfiles");
-                });
-
-            modelBuilder.Entity("WISE.Domain.Entities.DisplayProfileField", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("DisplayOrder")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("FieldName")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<bool>("IsVisible")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("Label")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<Guid>("ProfileId")
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ProfileId", "DisplayOrder");
-
-                    b.HasIndex("ProfileId", "FieldName")
-                        .IsUnique();
-
-                    b.ToTable("DisplayProfileFields");
                 });
 
             modelBuilder.Entity("WISE.Domain.Entities.EventLog", b =>
@@ -349,49 +242,6 @@ namespace WISE.Infrastructure.Migrations
                     b.ToTable("ProviderDiagnostics");
                 });
 
-            modelBuilder.Entity("WISE.Domain.Entities.ReadingHistory", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("DeviceId")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime>("LastReadAt")
-                        .HasColumnType("TEXT");
-
-                    b.Property<int?>("PageNumber")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<float?>("PositionPercent")
-                        .HasColumnType("REAL");
-
-                    b.Property<float?>("PositionSeconds")
-                        .HasColumnType("REAL");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("TEXT");
-
-                    b.Property<Guid>("WorkId")
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("WorkId");
-
-                    b.HasIndex("DeviceId", "LastReadAt");
-
-                    b.HasIndex("WorkId", "DeviceId")
-                        .IsUnique();
-
-                    b.ToTable("ReadingHistories");
-                });
-
             modelBuilder.Entity("WISE.Domain.Entities.WatchFolder", b =>
                 {
                     b.Property<Guid>("Id")
@@ -438,9 +288,6 @@ namespace WISE.Infrastructure.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<bool>("Favorite")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("MediaType")
                         .HasColumnType("INTEGER");
 
                     b.Property<Guid?>("MergedIntoId")
@@ -618,28 +465,6 @@ namespace WISE.Infrastructure.Migrations
                     b.Navigation("Work");
                 });
 
-            modelBuilder.Entity("WISE.Domain.Entities.CoverCache", b =>
-                {
-                    b.HasOne("WISE.Domain.Entities.Work", "Work")
-                        .WithMany()
-                        .HasForeignKey("WorkId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Work");
-                });
-
-            modelBuilder.Entity("WISE.Domain.Entities.DisplayProfileField", b =>
-                {
-                    b.HasOne("WISE.Domain.Entities.DisplayProfile", "Profile")
-                        .WithMany("Fields")
-                        .HasForeignKey("ProfileId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Profile");
-                });
-
             modelBuilder.Entity("WISE.Domain.Entities.EventLog", b =>
                 {
                     b.HasOne("WISE.Domain.Entities.Work", "TargetWork")
@@ -654,17 +479,6 @@ namespace WISE.Infrastructure.Migrations
                 {
                     b.HasOne("WISE.Domain.Entities.Work", "Work")
                         .WithMany("MetadataFields")
-                        .HasForeignKey("WorkId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Work");
-                });
-
-            modelBuilder.Entity("WISE.Domain.Entities.ReadingHistory", b =>
-                {
-                    b.HasOne("WISE.Domain.Entities.Work", "Work")
-                        .WithMany()
                         .HasForeignKey("WorkId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -692,11 +506,6 @@ namespace WISE.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("JobExecution");
-                });
-
-            modelBuilder.Entity("WISE.Domain.Entities.DisplayProfile", b =>
-                {
-                    b.Navigation("Fields");
                 });
 
             modelBuilder.Entity("WISE.Domain.Entities.Work", b =>

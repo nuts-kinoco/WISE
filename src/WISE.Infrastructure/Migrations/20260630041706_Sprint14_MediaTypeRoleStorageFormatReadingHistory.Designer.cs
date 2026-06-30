@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using WISE.Infrastructure.Data;
 
@@ -10,9 +11,11 @@ using WISE.Infrastructure.Data;
 namespace WISE.Infrastructure.Migrations
 {
     [DbContext(typeof(WiseDbContext))]
-    partial class WiseDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260630041706_Sprint14_MediaTypeRoleStorageFormatReadingHistory")]
+    partial class Sprint14_MediaTypeRoleStorageFormatReadingHistory
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "8.0.6");
