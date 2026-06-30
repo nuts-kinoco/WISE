@@ -32,10 +32,10 @@ public class FetchMetadataJobHandler
         );
 
         // 2. 収集
-        var candidates = await _metadataService.CollectCandidatesAsync(context);
+        var results = await _metadataService.CollectResultsAsync(context);
 
         // 3. 解決
-        var resolved = _conflictResolver.Resolve(candidates);
+        var resolved = _conflictResolver.Resolve(results.SelectMany(r => r.Candidates));
 
         // 4. 保存
         // (UnitOfWork等のRepositoryを経由して保存するが、今回は骨格のみ)

@@ -219,6 +219,17 @@ namespace WISE.Api.Controllers
                 }
             }
 
+            string? MetaFirstDetail(params string[] names)
+            {
+                foreach (var name in names)
+                {
+                    var v = work.MetadataFields.FirstOrDefault(m => m.FieldName == name && m.IsPrimary)?.Value
+                         ?? work.MetadataFields.FirstOrDefault(m => m.FieldName == name)?.Value;
+                    if (v != null) return v;
+                }
+                return null;
+            }
+
             return Ok(new
             {
                 work.Id,
@@ -227,6 +238,12 @@ namespace WISE.Api.Controllers
                 work.Rating,
                 UserMemo = userMemo,
                 SampleImages = sampleImages,
+                CoverUrl = ResolveMediaUrl(
+                    MetaFirstDetail("PortraitCover", "Cover") ?? $"/api/works/{work.Id}/cover",
+                    work.Assets),
+                CoverLandscapeUrl = ResolveMediaUrl(
+                    MetaFirstDetail("LandscapeCover", "CoverLandscape"),
+                    work.Assets),
                 Metadata = work.MetadataFields.Select(m => new { m.FieldName, m.Value, m.IsPrimary, m.ProviderId, m.ConfidenceScore }),
                 Assets = work.Assets.Select(a => new { a.Id, a.OriginalFilename, a.FileSize, a.Sha256, AssetType = a.AssetType.ToString() }),
                 History = history,

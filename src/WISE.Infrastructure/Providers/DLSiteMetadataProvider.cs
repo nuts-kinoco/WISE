@@ -187,10 +187,11 @@ public class DLSiteMetadataProvider : IMetadataProvider
             ?.GetAttributeValue("content", null);
         Add("description", CleanText(desc));
 
-        // Cover image: og:image
+        // Cover image: og:image (DLSiteのメイン画像は通常横長)
         var cover = doc.DocumentNode.SelectSingleNode("//meta[@property='og:image']")
             ?.GetAttributeValue("content", null);
-        Add("cover_url", cover);
+        Add("LandscapeCover", cover, 85);
+        Add("PortraitCover", cover, 70); // 縦長が取れない場合の代替
 
         // DLsite product ID
         Add("dlsite_id", id, 100);

@@ -248,8 +248,8 @@ export default function WorkDetailPage({ params }: { params: Promise<{ id: strin
   const genres = getMetaAll("Genre").flatMap(g => g.split("|").map(s => s.trim()).filter(Boolean))
     || work.metadata.filter(m => m.fieldName === "Genre").flatMap(m => m.value.split("|").map(s => s.trim()).filter(Boolean));
 
-  // Cover from PortraitCover / LandscapeCover MetadataFields
-  const portraitCoverUrl = resolveCoverUrl(getMeta("PortraitCover") ?? getMeta("Cover"));
+  // Cover from PortraitCover / LandscapeCover MetadataFields; fall back to work.coverUrl (ArchiveCoverProvider etc.)
+  const portraitCoverUrl = resolveCoverUrl(getMeta("PortraitCover") ?? getMeta("Cover")) ?? resolveCoverUrl(work.coverUrl);
   const landscapeCoverUrl = resolveCoverUrl(getMeta("LandscapeCover") ?? getMeta("CoverLandscape"));
   const activeCoverUrl = coverTab === "landscape" && landscapeCoverUrl ? landscapeCoverUrl : portraitCoverUrl;
 
@@ -494,6 +494,16 @@ export default function WorkDetailPage({ params }: { params: Promise<{ id: strin
                   <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-10">
                     <Loader2 className="w-10 h-10 animate-spin text-white" />
                   </div>
+                )}
+                {hasReader && !isDraggingCover && !uploadingCover && (
+                  <Link
+                    href={`/works/${resolvedParams.id}/reader`}
+                    className="absolute inset-0 z-20 flex items-end justify-center pb-3 opacity-0 hover:opacity-100 transition-opacity bg-black/30"
+                  >
+                    <span className="flex items-center gap-1.5 bg-black/70 text-white text-xs font-medium px-3 py-1.5 rounded-full">
+                      <BookOpen className="w-3.5 h-3.5" /> 読む
+                    </span>
+                  </Link>
                 )}
               </div>
 

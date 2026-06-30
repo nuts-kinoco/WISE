@@ -22,7 +22,8 @@ public class MetadataConflictResolver : IMetadataConflictResolver
             // 1. Confidence が最も高いもの
             // 2. 同点の場合は Timestamp が新しいもの
             var ordered = group.OrderByDescending(c => c.Confidence)
-                               .ThenByDescending(c => c.Timestamp)
+                               .ThenByDescending(c => c.Priority)
+                               .ThenByDescending(c => c.FetchedAt)
                                .ToList();
 
             bool isFirst = true;

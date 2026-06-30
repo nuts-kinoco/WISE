@@ -65,14 +65,32 @@ public class FetchMetadataJobUseCase
                      && !a.FilePath.EndsWith(".mkv", StringComparison.OrdinalIgnoreCase)
                      && !File.Exists(a.FilePath))
             .ToList();
-        if (orphanAssets.Count > 0)
+
+        // 同一 FilePath の重複アセット（古いジョブが複数回作成したもの）を除去: 最初の1件を残す
+        var duplicatePathAssets = work.Assets
+            .Where(a => a.FilePath != null)
+            .GroupBy(a => a.FilePath!, StringComparer.OrdinalIgnoreCase)
+            .Where(g => g.Count() > 1)
+            .SelectMany(g => g.OrderBy(a => a.DetectedAt).Skip(1))
+            .ToList();
+
+        // Thumbnail重複: AssetType=Thumbnailが複数ある場合、最新のもの(DetectedAt降順)1件だけ残す
+        var duplicateThumbnailAssets = work.Assets
+            .Where(a => a.AssetType == AssetType.Thumbnail)
+            .OrderByDescending(a => a.DetectedAt)
+            .Skip(1)
+            .ToList();
+
+        var assetsToRemove = orphanAssets.Concat(duplicatePathAssets).Concat(duplicateThumbnailAssets).DistinctBy(a => a.Id).ToList();
+        if (assetsToRemove.Count > 0)
         {
-            _dbContext.Set<Asset>().RemoveRange(orphanAssets);
+            _dbContext.Set<Asset>().RemoveRange(assetsToRemove);
             await _dbContext.SaveChangesAsync(cancellationToken);
             // Reload work so _assets list is in sync
             work = await _workRepository.GetByIdAsync(workId, cancellationToken)
                    ?? throw new Exception($"Work {workId} not found after orphan cleanup.");
-            _logger.LogInformation("[AssetCleanup] Removed {Count} orphan assets for Work {WorkId}", orphanAssets.Count, workId);
+            _logger.LogInformation("[AssetCleanup] Removed {Orphans} orphans + {Dups} duplicates for Work {WorkId}",
+                orphanAssets.Count, duplicatePathAssets.Count, workId);
         }
 
         work.UpdateStatus(ProcessingStatus.MetadataFetching);
@@ -114,10 +132,47 @@ public class FetchMetadataJobUseCase
         // 2. Conflict resolution
         var resolvedCandidates = _conflictResolver.Resolve(allCandidates).ToList();
 
+        // 2.5. ローカルカバーファイル検出: {identifier}_pl.jpg / {identifier}_ps.jpg が既に存在する場合、
+        //       ネットダウンロードより優先してカバー候補に追加する (Priority=85, Confidence=85)。
+        //       例: rpin-010_pl.jpg (MGStage/Fanzaの慣習: pl=landscape, ps=portrait)
+        {
+            var localCoverDir = DetermineWorkDirectory(work);
+            var identifier = work.PrimaryIdentifier?.ToLower();
+            if (localCoverDir != null && identifier != null)
+            {
+                var localCoverMap = new[]
+                {
+                    (suffix: "pl", field: "LandscapeCover", role: AssetRole.CoverLandscape, type: AssetType.LandscapeCover),
+                    (suffix: "ps", field: "PortraitCover",  role: AssetRole.CoverPortrait,  type: AssetType.PortraitCover),
+                };
+                foreach (var (suffix, field, role, type) in localCoverMap)
+                {
+                    // 既にそのフィールドの候補がある場合はスキップ
+                    if (resolvedCandidates.Any(c => c.Candidate.FieldName == field)) continue;
+
+                    var localPath = Path.Combine(localCoverDir, $"{identifier}_{suffix}.jpg");
+                    if (!File.Exists(localPath) || new FileInfo(localPath).Length < 20_000) continue;
+
+                    var existingAsset = work.Assets.FirstOrDefault(a =>
+                        string.Equals(a.FilePath, localPath, StringComparison.OrdinalIgnoreCase));
+                    var assetId = existingAsset?.Id ?? Guid.NewGuid();
+                    if (existingAsset == null)
+                        work.AddAsset(new Asset(localPath, Path.GetFileName(localPath), new FileInfo(localPath).Length, null, assetId, type, role));
+
+                    var apiUrl = $"/api/assets/{assetId}/content";
+                    resolvedCandidates.Add(new ResolvedMetadataCandidate(
+                        new MetadataCandidate("LocalCoverFile", field, apiUrl, 85, 85, "local"),
+                        true));
+
+                    _logger.LogInformation("[LocalCover] {Field} ← {Path}", field, localPath);
+                }
+            }
+        }
+
         // 3. Download PortraitCover / LandscapeCover from remote URLs to local disk
         //    複数候補を信頼度順に試し、最小解像度(MinCoverFileSizeBytes)を満たす最初のURLを採用する。
         //    Store /api/assets/{id}/content URL in MetadataField (not local path) so frontend uses directly.
-        const int MinCoverFileSizeBytes = 20_000; // 20KB 未満は低解像度として却下
+        const int MinCoverFileSizeBytes = 8_000; // 8KB 未満は低解像度・404エラーページとして却下
         var coverFields = new[] { "PortraitCover", "LandscapeCover" };
         var coverDir = DetermineWorkDirectory(work);
         if (coverDir != null)
@@ -195,6 +250,20 @@ public class FetchMetadataJobUseCase
             }
         }
 
+        // 3.1. For archive-only works (no video asset → coverDir=null), discard any HTTP/HTTPS cover candidates.
+        //      They are unverified template URLs (e.g. Fanza SPA shell generates URLs regardless of product existence).
+        //      Archive covers are served on demand by ArchiveCoverProvider via /api/works/{id}/cover instead.
+        if (coverDir == null)
+        {
+            var undownloadedCovers = resolvedCandidates
+                .Where(c => (c.Candidate.FieldName == "PortraitCover" || c.Candidate.FieldName == "LandscapeCover")
+                         && c.Candidate.Value.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            foreach (var c in undownloadedCovers) resolvedCandidates.Remove(c);
+            if (undownloadedCovers.Count > 0)
+                _logger.LogInformation("[Cover] Discarded {Count} unverified HTTP cover candidates (archive-only work, no download directory)", undownloadedCovers.Count);
+        }
+
         // 3.5. Sample images — only when setting downloadSampleImages = true
         var downloadSamples = false;
         var sampleSetting = await _dbContext.AppSettings.FindAsync(new object[] { "downloadSampleImages" }, cancellationToken);
@@ -256,8 +325,23 @@ public class FetchMetadataJobUseCase
             }
         }
 
-        // 4. FFmpeg thumbnail — only when no PortraitCover at all
+        // 4. FFmpeg thumbnail — only when no PortraitCover and no LandscapeCover to use as fallback
         bool hasCover = resolvedCandidates.Any(c => c.Candidate.FieldName == "PortraitCover");
+        // LandscapeCoverがあればPortraitCoverとしても代用する（FFmpegサムネイル生成をスキップ）
+        if (!hasCover)
+        {
+            var landscapeCandidate = resolvedCandidates.FirstOrDefault(c => c.Candidate.FieldName == "LandscapeCover");
+            if (landscapeCandidate != null)
+            {
+                resolvedCandidates.Add(new ResolvedMetadataCandidate(
+                    new MetadataCandidate(landscapeCandidate.Candidate.ProviderId, "PortraitCover",
+                        landscapeCandidate.Candidate.Value, landscapeCandidate.Candidate.Confidence - 5,
+                        landscapeCandidate.Candidate.Priority, landscapeCandidate.Candidate.SourceUrl),
+                    true));
+                hasCover = true;
+                _logger.LogInformation("[Cover] No PortraitCover found; using LandscapeCover as fallback portrait.");
+            }
+        }
         if (!hasCover && work.Assets.Any())
         {
             try
@@ -348,9 +432,17 @@ public class FetchMetadataJobUseCase
         bool hasLandscapeCover = resolvedCandidates.Any(c => c.Candidate.FieldName == "LandscapeCover");
         bool hasIdentifier = !string.IsNullOrWhiteSpace(work.PrimaryIdentifier);
 
+        // アーカイブ系作品（同人誌など）は ArchiveCoverProvider が動的にカバーを提供するため PortraitCover メタデータ不要
+        bool hasArchiveCover = work.Assets.Any(a =>
+        {
+            if (string.IsNullOrEmpty(a.FilePath)) return false;
+            var ext = Path.GetExtension(a.FilePath).ToLowerInvariant();
+            return ext is ".zip" or ".cbz" or ".rar" or ".cbr" or ".7z" or ".pdf" or ".epub";
+        });
+
         // Actress / Maker / LandscapeCover は任意（FC2-PPV では構造的に取得できないケースが多い）。
-        // 必須: Title + PortraitCover + Identifier
-        bool isComplete = hasTitle && hasPortraitCover && hasIdentifier;
+        // 必須: Title + (PortraitCover または ArchiveCover) + Identifier
+        bool isComplete = hasTitle && (hasPortraitCover || hasArchiveCover) && hasIdentifier;
 
         if (isComplete)
         {
@@ -550,10 +642,18 @@ public class FetchMetadataJobUseCase
 
     private string? DetermineWorkDirectory(WISE.Domain.Entities.Work work)
     {
-        var videoAsset = work.Assets.FirstOrDefault(a =>
-            a.FilePath != null && (a.FilePath.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase)
-                                || a.FilePath.EndsWith(".mkv", StringComparison.OrdinalIgnoreCase)));
-        return videoAsset?.FilePath != null ? Path.GetDirectoryName(videoAsset.FilePath) : null;
+        var primaryAsset = work.Assets.FirstOrDefault(a =>
+            a.FilePath != null && (
+                a.FilePath.EndsWith(".mp4",  StringComparison.OrdinalIgnoreCase) ||
+                a.FilePath.EndsWith(".mkv",  StringComparison.OrdinalIgnoreCase) ||
+                a.FilePath.EndsWith(".zip",  StringComparison.OrdinalIgnoreCase) ||
+                a.FilePath.EndsWith(".cbz",  StringComparison.OrdinalIgnoreCase) ||
+                a.FilePath.EndsWith(".rar",  StringComparison.OrdinalIgnoreCase) ||
+                a.FilePath.EndsWith(".cbr",  StringComparison.OrdinalIgnoreCase) ||
+                a.FilePath.EndsWith(".7z",   StringComparison.OrdinalIgnoreCase) ||
+                a.FilePath.EndsWith(".epub", StringComparison.OrdinalIgnoreCase) ||
+                a.FilePath.EndsWith(".pdf",  StringComparison.OrdinalIgnoreCase)));
+        return primaryAsset?.FilePath != null ? Path.GetDirectoryName(primaryAsset.FilePath) : null;
     }
 
     private async Task<bool> DownloadFileAsync(string url, string localPath, CancellationToken cancellationToken,

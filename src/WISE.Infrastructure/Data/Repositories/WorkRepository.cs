@@ -33,7 +33,25 @@ public class WorkRepository : IWorkRepository
 
     public Task UpdateAsync(Work work, CancellationToken cancellationToken = default)
     {
-        _context.Entry(work).State = EntityState.Modified;
+        // Entity is already tracked by DbContext when fetched via GetByIdAsync.
+        // But newly added children with generated GUIDs will be marked as Modified by default.
+        // We explicitly mark untracked children as Added.
+        foreach (var asset in work.Assets)
+        {
+            if (_context.Entry(asset).State == EntityState.Detached)
+            {
+                _context.Entry(asset).State = EntityState.Added;
+            }
+        }
+        
+        foreach (var field in work.MetadataFields)
+        {
+            if (_context.Entry(field).State == EntityState.Detached)
+            {
+                _context.Entry(field).State = EntityState.Added;
+            }
+        }
+        
         return Task.CompletedTask;
     }
 

@@ -10,12 +10,12 @@ public class ConflictDummyMetadataProvider : IMetadataProvider
     public string ProviderId => "ConflictDummy";
     public int Priority => 20;
 
-    public Task<IEnumerable<MetadataCandidate>> FetchAsync(MetadataProviderContext context)
+    public Task<MetadataResult> FetchAsync(MetadataProviderContext context)
     {
-        return Task.FromResult<IEnumerable<MetadataCandidate>>(new[]
+        var result = new List<MetadataCandidate>
         {
-            new MetadataCandidate(ProviderId, "Title", "Conflicting Title", 95),
-            new MetadataCandidate(ProviderId, "Maker", "Conflict Maker", 90)
-        });
+            new MetadataCandidate(ProviderId, "Title", "Dummy Conflict Video A", 80, Priority, "local")
+        };
+        return Task.FromResult(MetadataResult.Succeeded(ProviderId, result, TimeSpan.Zero));
     }
 }

@@ -7,8 +7,10 @@ public record MetadataCandidate(
     string FieldName,
     string Value,
     int Confidence,
-    string? Evidence = null
+    int Priority,
+    string? Evidence = null,
+    string? SourceUrl = null
 )
 {
-    public DateTime Timestamp { get; init; } = DateTime.UtcNow;
+    public DateTime FetchedAt { get; init; } = DateTime.UtcNow;
 }

@@ -185,6 +185,8 @@ export interface WorkDetail {
   favorite: boolean;
   rating: number | null;
   userMemo: string | null;
+  coverUrl: string | null;
+  coverLandscapeUrl: string | null;
   sampleImages: string[];
   metadata: Array<{ fieldName: string, value: string, isPrimary: boolean, providerId: string, confidenceScore: number }>;
   assets: Array<{ id: string, originalFilename: string, fileSize: number, sha256: string | null, assetType: string }>;

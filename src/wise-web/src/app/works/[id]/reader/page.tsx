@@ -61,15 +61,21 @@ export default function ReaderPage({ params }: { params: Promise<{ id: string }>
   }, [data, history, resumedFromHistory]);
 
   // Debounced save: write to backend 2s after page change
+  // When reaching the last page, set positionPercent=1.0 so HomeController excludes it from "続きを見る"
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (!resumedFromHistory || !deviceId) return;
     if (saveTimer.current) clearTimeout(saveTimer.current);
+    const isFinished = totalPages > 0 && currentPage >= totalPages - 1;
     saveTimer.current = setTimeout(() => {
-      saveReadingHistory(id, { deviceId, pageNumber: currentPage }).catch(() => {});
+      saveReadingHistory(id, {
+        deviceId,
+        pageNumber: currentPage,
+        positionPercent: isFinished ? 1.0 : null,
+      }).catch(() => {});
     }, 2000);
     return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
-  }, [id, currentPage, deviceId, resumedFromHistory]);
+  }, [id, currentPage, deviceId, resumedFromHistory, totalPages]);
 
   // ── Navigation ──────────────────────────────────────────────────────────────
 
@@ -264,11 +270,11 @@ export default function ReaderPage({ params }: { params: Promise<{ id: string }>
 
       {/* ── Page display area ── */}
       <div className="flex-1 flex items-center justify-center overflow-hidden">
-        <div className={`flex h-full ${pageMode === "double" ? "gap-0.5" : ""} max-h-screen`}>
+        <div className={`flex h-full w-full max-h-screen ${pageMode === "double" ? "gap-0.5" : "justify-center"}`}>
           {pageIndexes.map((pi) => (
             <div
               key={pi}
-              className={`relative ${pageMode === "double" ? "w-[50vw]" : "w-full max-w-[100vh]"} h-screen`}
+              className={`relative ${pageMode === "double" ? "w-[50vw]" : "max-w-[100vh] w-screen"} h-screen`}
             >
               <Image
                 key={getReaderPageUrl(id, pi)}

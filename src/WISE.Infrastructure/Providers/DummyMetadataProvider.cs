@@ -10,12 +10,12 @@ public class DummyMetadataProvider : IMetadataProvider
     public string ProviderId => "Dummy";
     public int Priority => 10;
 
-    public Task<IEnumerable<MetadataCandidate>> FetchAsync(MetadataProviderContext context)
+    public Task<MetadataResult> FetchAsync(MetadataProviderContext context)
     {
-        return Task.FromResult<IEnumerable<MetadataCandidate>>(new[]
+        var result = new List<MetadataCandidate>
         {
-            new MetadataCandidate(ProviderId, "Title", "Dummy Title", 80),
-            new MetadataCandidate(ProviderId, "Actress", "Dummy Actress", 80)
-        });
+            new MetadataCandidate(ProviderId, "Title", "Dummy Video A", 80, Priority, "local")
+        };
+        return Task.FromResult(MetadataResult.Succeeded(ProviderId, result, TimeSpan.Zero));
     }
 }

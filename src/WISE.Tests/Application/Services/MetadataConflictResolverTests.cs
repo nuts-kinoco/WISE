@@ -23,9 +23,9 @@ public class MetadataConflictResolverTests
         // Arrange
         var candidates = new List<MetadataCandidate>
         {
-            new("ProviderA", "Title", "A title", 80),
-            new("ProviderB", "Title", "B title", 95),
-            new("ProviderC", "Title", "C title", 60)
+            new("ProviderA", "Title", "A title", 80, 50),
+            new("ProviderB", "Title", "B title", 95, 50),
+            new("ProviderC", "Title", "C title", 60, 50)
         };
 
         // Act
@@ -52,8 +52,8 @@ public class MetadataConflictResolverTests
 
         var candidates = new List<MetadataCandidate>
         {
-            new("ProviderA", "Actress", "Actress A", 90) { Timestamp = oldTime },
-            new("ProviderB", "Actress", "Actress B", 90) { Timestamp = newTime }
+            new("ProviderA", "Actress", "Actress A", 90, 50) { FetchedAt = oldTime },
+            new("ProviderB", "Actress", "Actress B", 90, 50) { FetchedAt = newTime }
         };
 
         // Act
@@ -71,10 +71,10 @@ public class MetadataConflictResolverTests
         // Arrange
         var candidates = new List<MetadataCandidate>
         {
-            new("ProvA", "Title", "T1", 90),
-            new("ProvB", "Title", "T2", 80),
-            new("ProvA", "Maker", "M1", 70),
-            new("ProvB", "Maker", "M2", 95)
+            new("ProvA", "Title", "T1", 90, 50),
+            new("ProvB", "Title", "T2", 80, 50),
+            new("ProvA", "Maker", "M1", 70, 50),
+            new("ProvB", "Maker", "M2", 95, 50)
         };
 
         // Act
@@ -89,3 +89,4 @@ public class MetadataConflictResolverTests
         primaries.Single(r => r.Candidate.FieldName == "Maker").Candidate.Value.Should().Be("M2");
     }
 }
+

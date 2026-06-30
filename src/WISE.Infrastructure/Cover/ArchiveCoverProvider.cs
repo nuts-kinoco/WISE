@@ -35,7 +35,9 @@ public class ArchiveCoverProvider : ICoverProvider
             return Task.FromResult(false);
 
         var archiveAsset = work.Assets.FirstOrDefault(a =>
-            (a.StorageFormat == StorageFormat.Archive || a.StorageFormat == StorageFormat.Folder)
+            (a.StorageFormat == StorageFormat.Archive
+             || a.StorageFormat == StorageFormat.Folder
+             || IsArchiveExtension(a.FilePath))
             && _selector.Select(a.FilePath) != null);
 
         return Task.FromResult(archiveAsset != null);
@@ -44,7 +46,9 @@ public class ArchiveCoverProvider : ICoverProvider
     public async Task<CoverResult?> GetCoverAsync(Work work, CancellationToken ct = default)
     {
         var archiveAsset = work.Assets.FirstOrDefault(a =>
-            (a.StorageFormat == StorageFormat.Archive || a.StorageFormat == StorageFormat.Folder)
+            (a.StorageFormat == StorageFormat.Archive
+             || a.StorageFormat == StorageFormat.Folder
+             || IsArchiveExtension(a.FilePath))
             && _selector.Select(a.FilePath) != null);
 
         if (archiveAsset == null) return null;
@@ -84,5 +88,12 @@ public class ArchiveCoverProvider : ICoverProvider
             _logger.LogWarning(ex, "[ArchiveCover] Failed to extract cover from {Path}", archiveAsset.FilePath);
             return null;
         }
+    }
+
+    private static bool IsArchiveExtension(string? filePath)
+    {
+        if (string.IsNullOrEmpty(filePath)) return false;
+        var ext = Path.GetExtension(filePath).ToLowerInvariant();
+        return ext is ".zip" or ".cbz" or ".rar" or ".cbr" or ".7z";
     }
 }

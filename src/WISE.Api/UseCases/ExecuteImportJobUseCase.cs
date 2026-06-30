@@ -245,6 +245,8 @@ public class ExecuteImportJobUseCase
     private static (AssetRole role, StorageFormat format) InferAssetRoleAndFormat(string filePath)
     {
         var ext = Path.GetExtension(filePath).ToLowerInvariant();
+        var nameWithoutExt = Path.GetFileNameWithoutExtension(filePath).ToLowerInvariant();
+
         return ext switch
         {
             ".mp4" or ".mkv" or ".avi" or ".wmv" or ".mov" or ".m4v"
@@ -256,7 +258,9 @@ public class ExecuteImportJobUseCase
             ".pdf"
                 => (AssetRole.Archive, StorageFormat.Pdf),
             ".jpg" or ".jpeg" or ".png" or ".webp" or ".gif"
-                => (AssetRole.Image, StorageFormat.SingleFile),
+                => nameWithoutExt.EndsWith("_pl") ? (AssetRole.CoverLandscape, StorageFormat.SingleFile)
+                 : nameWithoutExt.EndsWith("_ps") ? (AssetRole.CoverPortrait, StorageFormat.SingleFile)
+                 : (AssetRole.Image, StorageFormat.SingleFile),
             _ => (AssetRole.Unknown, StorageFormat.SingleFile)
         };
     }

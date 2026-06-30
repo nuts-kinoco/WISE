@@ -55,6 +55,7 @@ builder.Services.AddScoped<IMetadataProvider, Fc2MetadataProvider>();     // Pri
 // Tier2: フォールバック補完（Priority<70）
 builder.Services.AddScoped<IMetadataProvider, Fc2AltMetadataProvider>(); // Priority=55（FC2削除済みコンテンツ）
 builder.Services.AddScoped<IMetadataProvider, AvWikiMetadataProvider>(); // Priority=60（日本語DB・補完用）
+builder.Services.AddScoped<IMetadataProvider, DoujinishiFilenameMetadataProvider>(); // Priority=50（ファイル名解析）
 builder.Services.AddScoped<MetadataService>();
 builder.Services.AddScoped<IMetadataConflictResolver, MetadataConflictResolver>();
 builder.Services.AddSingleton<WISE.Application.Services.IJobCancellationService, WISE.Application.Services.JobCancellationService>();

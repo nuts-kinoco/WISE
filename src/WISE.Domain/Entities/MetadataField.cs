@@ -22,9 +22,9 @@ public class MetadataField : Entity
         ProviderId = string.Empty;
     }
 
-    public MetadataField(string fieldName, string value, string providerId, bool isPrimary, int confidenceScore)
+    public MetadataField(string fieldName, string value, string providerId, bool isPrimary, int confidenceScore, Guid? id = null)
     {
-        Id = Guid.NewGuid();
+        Id = id ?? Guid.NewGuid();
         FieldName = fieldName ?? throw new ArgumentNullException(nameof(fieldName));
         Value = value ?? throw new ArgumentNullException(nameof(value));
         ProviderId = providerId ?? throw new ArgumentNullException(nameof(providerId));
@@ -40,4 +40,8 @@ public class MetadataField : Entity
         ProviderId = providerId ?? throw new ArgumentNullException(nameof(providerId));
         FetchedAt = DateTime.UtcNow;
     }
+
+    public void SetPrimary(bool isPrimary) => IsPrimary = isPrimary;
+
+    public void SetWorkId(Guid workId) => WorkId = workId;
 }

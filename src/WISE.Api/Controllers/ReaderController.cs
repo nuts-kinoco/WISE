@@ -102,6 +102,14 @@ namespace WISE.Api.Controllers
             => assets.FirstOrDefault(a =>
                 a.StorageFormat == StorageFormat.Archive
                 || a.StorageFormat == StorageFormat.Folder
-                || a.StorageFormat == StorageFormat.Pdf);
+                || a.StorageFormat == StorageFormat.Pdf
+                || IsArchiveExtension(a.FilePath));
+
+        private static bool IsArchiveExtension(string? filePath)
+        {
+            if (string.IsNullOrEmpty(filePath)) return false;
+            var ext = Path.GetExtension(filePath).ToLowerInvariant();
+            return ext is ".zip" or ".cbz" or ".rar" or ".cbr" or ".7z";
+        }
     }
 }

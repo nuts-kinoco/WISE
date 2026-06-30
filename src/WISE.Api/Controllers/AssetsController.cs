@@ -36,8 +36,7 @@ namespace WISE.Api.Controllers
 
             if (string.IsNullOrEmpty(asset.FilePath) || !System.IO.File.Exists(asset.FilePath))
             {
-                // Fallback to dummy image for UI development
-                return Redirect($"https://picsum.photos/seed/{asset.Id}/400/600");
+                return NotFound();
             }
 
             var contentType = GetContentType(asset.FilePath);
