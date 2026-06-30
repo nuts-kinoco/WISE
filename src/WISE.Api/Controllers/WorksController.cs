@@ -623,8 +623,8 @@ namespace WISE.Api.Controllers
                 return NotFound();
 
             var filePaths = deleteFiles
-                ? work.Assets.Select(a => a.FilePath).Where(p => !string.IsNullOrEmpty(p)).ToList()
-                : new System.Collections.Generic.List<string?>();
+                ? work.Assets.Select(a => a.FilePath).OfType<string>().ToList()
+                : new List<string>();
 
             // DB から関連レコードをすべて削除
             var workTarget = $"Work_{workId}";

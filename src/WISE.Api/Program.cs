@@ -12,10 +12,8 @@ using WISE.Infrastructure.Providers;
 using WISE.Application.Services;
 using WISE.Api.UseCases;
 using WISE.Infrastructure.Cookies;
-using WISE.Infrastructure.Data;
 using WISE.Infrastructure.Cover;
 using WISE.Infrastructure.Viewers;
-using WISE.Infrastructure.Services;
 using WISE.Infrastructure.Archive;
 
 var builder = WebApplication.CreateBuilder(args);

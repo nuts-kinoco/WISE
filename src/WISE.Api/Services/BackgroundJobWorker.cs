@@ -73,7 +73,8 @@ public class BackgroundJobWorker : BackgroundService
         {
             if (job.JobType == "Import")
             {
-                var executeUseCase = scope.ServiceProvider.GetRequiredService<ExecuteImportJobUseCase>();
+                using var executionScope = _scopeFactory.CreateScope();
+                var executeUseCase = executionScope.ServiceProvider.GetRequiredService<ExecuteImportJobUseCase>();
                 var request = JsonSerializer.Deserialize<ImportJobRequest>(job.Payload ?? "{}");
 
                 if (request != null)
@@ -101,7 +102,6 @@ public class BackgroundJobWorker : BackgroundService
             }
             else if (job.JobType == "FetchMetadata")
             {
-                var fetchMetadataUseCase = scope.ServiceProvider.GetRequiredService<FetchMetadataJobUseCase>();
                 var payloadNode = JsonDocument.Parse(job.Payload ?? "{}").RootElement;
                 if (payloadNode.TryGetProperty("WorkId", out var workIdElement) && Guid.TryParse(workIdElement.GetString(), out var workId))
                 {
@@ -110,13 +110,16 @@ public class BackgroundJobWorker : BackgroundService
 
                     int maxRetries = 3;
                     int attempts = 0;
-                    string resultJson = null;
-                    Exception lastException = null;
+                    string? resultJson = null;
+                    Exception? lastException = null;
 
                     while (attempts < maxRetries)
                     {
                         try
                         {
+                            using var executionScope = _scopeFactory.CreateScope();
+                            var fetchMetadataUseCase = executionScope.ServiceProvider.GetRequiredService<FetchMetadataJobUseCase>();
+                            
                             attempts++;
                             resultJson = await fetchMetadataUseCase.ExecuteAsync(workId, cts.Token);
                             break; // Success
