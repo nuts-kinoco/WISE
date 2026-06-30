@@ -8,7 +8,8 @@ import {
   ArrowLeft, ChevronLeft, ChevronRight, Maximize2, Minimize2,
   BookOpen, LayoutTemplate, Settings,
 } from "lucide-react";
-import { fetchReaderPages, getReaderPageUrl, type ReaderPage } from "@/lib/api";
+import { fetchReaderPages, getReaderPageUrl, fetchReadingHistory, saveReadingHistory } from "@/lib/api";
+import { useDeviceId } from "@/hooks/useDeviceId";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -24,12 +25,21 @@ type PageMode = "single" | "double";
 export default function ReaderPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
 
+  const deviceId = useDeviceId();
+
   const { data, isLoading, error } = useQuery({
     queryKey: ["reader", id],
     queryFn: () => fetchReaderPages(id),
   });
 
+  const { data: history } = useQuery({
+    queryKey: ["reading-history", id, deviceId],
+    queryFn: () => fetchReadingHistory(id, deviceId),
+    enabled: !!deviceId,
+  });
+
   const [currentPage, setCurrentPage] = useState(0);
+  const [resumedFromHistory, setResumedFromHistory] = useState(false);
   const [direction, setDirection] = useState<ReadingDirection>("rtl");
   const [pageMode, setPageMode] = useState<PageMode>("single");
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -39,6 +49,27 @@ export default function ReaderPage({ params }: { params: Promise<{ id: string }>
   const containerRef = useRef<HTMLDivElement>(null);
 
   const totalPages = data?.totalPages ?? 0;
+
+  // Restore last-read page once both data and history are loaded
+  useEffect(() => {
+    if (!data || resumedFromHistory) return;
+    const saved = history?.pageNumber;
+    if (saved != null && saved > 0 && saved < data.totalPages) {
+      setCurrentPage(saved);
+    }
+    setResumedFromHistory(true);
+  }, [data, history, resumedFromHistory]);
+
+  // Debounced save: write to backend 2s after page change
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!resumedFromHistory || !deviceId) return;
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      saveReadingHistory(id, { deviceId, pageNumber: currentPage }).catch(() => {});
+    }, 2000);
+    return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
+  }, [id, currentPage, deviceId, resumedFromHistory]);
 
   // ── Navigation ──────────────────────────────────────────────────────────────
 
@@ -169,6 +200,11 @@ export default function ReaderPage({ params }: { params: Promise<{ id: string }>
           {pageMode === "double" && currentPage + 1 < totalPages
             ? ` – ${currentPage + 2} / ${totalPages}` : ""}
         </span>
+        {history?.pageNumber != null && history.pageNumber === currentPage && (
+          <span className="text-[11px] bg-primary/20 text-primary px-2 py-0.5 rounded-full ml-2">
+            前回の続き
+          </span>
+        )}
         <div className="ml-auto flex items-center gap-2">
           <button
             onClick={() => setShowSettings((v) => !v)}

@@ -316,6 +316,47 @@ export async function deleteUserTag(workId: string, tagValue: string): Promise<v
   if (!res.ok) throw new Error('Failed to delete tag');
 }
 
+// ── Reading History API ────────────────────────────────────────────────────
+
+export interface ReadingHistory {
+  workId: string;
+  deviceId: string;
+  pageNumber: number | null;
+  positionSeconds: number | null;
+  positionPercent: number | null;
+  lastReadAt: string;
+  updatedAt: string;
+}
+
+export async function fetchReadingHistory(workId: string, deviceId: string): Promise<ReadingHistory | null> {
+  const res = await fetch(
+    `${API_BASE_URL}/works/${workId}/reading-history?deviceId=${encodeURIComponent(deviceId)}`
+  );
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error('Failed to fetch reading history');
+  return res.json();
+}
+
+export async function saveReadingHistory(
+  workId: string,
+  data: { deviceId: string; pageNumber?: number | null; positionSeconds?: number | null; positionPercent?: number | null }
+): Promise<ReadingHistory> {
+  const res = await fetch(`${API_BASE_URL}/works/${workId}/reading-history`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error('Failed to save reading history');
+  return res.json();
+}
+
+export async function deleteReadingHistory(workId: string, deviceId: string): Promise<void> {
+  await fetch(
+    `${API_BASE_URL}/works/${workId}/reading-history?deviceId=${encodeURIComponent(deviceId)}`,
+    { method: 'DELETE' }
+  );
+}
+
 export async function deleteGenreTag(workId: string, tagValue: string): Promise<void> {
   const res = await fetch(`${API_BASE_URL}/works/${workId}/genre-tags/${encodeURIComponent(tagValue)}`, {
     method: 'DELETE',
