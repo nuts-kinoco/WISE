@@ -1,92 +1,232 @@
 "use client";
 
-import { useGalleryStore } from "@/store/useGalleryStore";
+import { useGalleryStore, type Density } from "@/store/useGalleryStore";
+import type { MediaType } from "@/lib/api";
 import { GalleryGrid } from "@/components/gallery/GalleryGrid";
-import { Search, Grid, LayoutGrid, Rows3, Moon, Sun, Monitor, Settings2, HardDriveUpload, Clock, Activity } from "lucide-react";
-import { useEffect, useState } from "react";
+import { DisplaySettingsPanel } from "@/components/gallery/DisplaySettingsPanel";
+import {
+  Search, Moon, Sun, Monitor, Settings2, HardDriveUpload,
+  Clock, Activity, RectangleVertical, RectangleHorizontal,
+  X, AlertTriangle, TableProperties, Copy, SlidersHorizontal,
+  List, Grid, LayoutGrid, Rows3,
+} from "lucide-react";
+import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
+import { JobQueuePanel, TopProgressBar } from "@/components/JobQueuePanel";
+
+// ── Density mode config ───────────────────────────────────────────────────────
+
+const DENSITY_OPTIONS: { value: Density; icon: React.ReactNode; label: string }[] = [
+  { value: "compact", icon: <Grid className="w-4 h-4" />,       label: "コンパクト" },
+  { value: "normal",  icon: <LayoutGrid className="w-4 h-4" />, label: "ノーマル"   },
+  { value: "rich",    icon: <Rows3 className="w-4 h-4" />,      label: "リッチ"     },
+  { value: "list",    icon: <List className="w-4 h-4" />,       label: "リスト"     },
+];
+
+// ── MediaType filter tabs ─────────────────────────────────────────────────────
+
+const MEDIA_TYPE_TABS: { value: MediaType | null; label: string }[] = [
+  { value: null,              label: "すべて" },
+  { value: "Video",           label: "動画" },
+  { value: "Comic",           label: "コミック" },
+  { value: "Book",            label: "書籍" },
+  { value: "PhotoBook",       label: "写真集" },
+  { value: "ImageCollection", label: "画像集" },
+  { value: "Audio",           label: "音声" },
+];
+
+// ── Component ─────────────────────────────────────────────────────────────────
 
 export default function Home() {
-  const { searchQuery, setSearchQuery, cardSize, setCardSize, theme, setTheme } = useGalleryStore();
-  
-  // Prevent hydration mismatch on toggle buttons
+  const {
+    searchQuery, setSearchQuery,
+    density, setDensity,
+    theme, setTheme,
+    coverLayout, setCoverLayout,
+    mediaTypeFilter, setMediaTypeFilter,
+  } = useGalleryStore();
+
   const [mounted, setMounted] = useState(false);
+  const [showDisplayPanel, setShowDisplayPanel] = useState(false);
+
   useEffect(() => setMounted(true), []);
+
+  const closePanel = useCallback(() => setShowDisplayPanel(false), []);
 
   return (
     <main className="flex min-h-screen flex-col bg-background">
-      {/* Header Area */}
-      <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex h-16 items-center px-4 md:px-6">
-          <div className="flex items-center gap-2 font-bold text-xl mr-6 tracking-wider">
+      <TopProgressBar />
+
+      {/* ── Header ── */}
+      <header className="sticky top-0 z-50 w-full border-b border-border/50 bg-background/95 backdrop-blur">
+        <div className="container flex h-16 items-center gap-3 px-4 md:px-6">
+
+          {/* Logo */}
+          <Link
+            href="/"
+            className="flex items-center gap-2 font-bold text-xl mr-4 tracking-wider hover:opacity-80 transition-opacity flex-none"
+          >
             <span className="text-primary">WISE</span>
-            <span className="text-muted-foreground font-normal text-sm">Media Library</span>
-          </div>
+          </Link>
 
-          <div className="flex-1 flex items-center justify-center">
-            <div className="relative w-full max-w-xl">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search works by title or identifier..."
-                className="w-full h-10 bg-muted/50 border-none rounded-full pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
-              />
-            </div>
-          </div>
-
-          <div className="flex items-center gap-4 ml-6">
-            {mounted && (
-              <>
-                <div className="flex items-center bg-muted/50 rounded-full p-1">
-                  <button onClick={() => setCardSize('sm')} className={`p-1.5 rounded-full ${cardSize === 'sm' ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
-                    <Grid className="w-4 h-4" />
-                  </button>
-                  <button onClick={() => setCardSize('md')} className={`p-1.5 rounded-full ${cardSize === 'md' ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
-                    <LayoutGrid className="w-4 h-4" />
-                  </button>
-                  <button onClick={() => setCardSize('lg')} className={`p-1.5 rounded-full ${cardSize === 'lg' ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
-                    <Rows3 className="w-4 h-4" />
-                  </button>
-                </div>
-
-                <div className="flex items-center bg-muted/50 rounded-full p-1">
-                  <button onClick={() => setTheme('light')} className={`p-1.5 rounded-full ${theme === 'light' ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
-                    <Sun className="w-4 h-4" />
-                  </button>
-                  <button onClick={() => setTheme('dark')} className={`p-1.5 rounded-full ${theme === 'dark' ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
-                    <Moon className="w-4 h-4" />
-                  </button>
-                  <button onClick={() => setTheme('system')} className={`p-1.5 rounded-full ${theme === 'system' ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
-                    <Monitor className="w-4 h-4" />
-                  </button>
-                </div>
-
-                <div className="flex items-center gap-1 border-l pl-4 ml-2">
-                  <Link href="/history" className="p-2 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors" title="Event History">
-                    <Clock className="w-5 h-5" />
-                  </Link>
-                  <Link href="/jobs" className="p-2 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors" title="Background Jobs">
-                    <Activity className="w-5 h-5" />
-                  </Link>
-                  <Link href="/import" className="p-2 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors" title="Import Pipeline">
-                    <HardDriveUpload className="w-5 h-5 text-blue-500" />
-                  </Link>
-                  <Link href="/settings" className="p-2 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors" title="Settings">
-                    <Settings2 className="w-5 h-5" />
-                  </Link>
-                </div>
-              </>
+          {/* Search */}
+          <div className="relative flex-1 max-w-2xl">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="作品を検索（品番・タイトル・出演者・メーカー）"
+              className="w-full h-10 bg-muted/40 border-none rounded-full pl-10 pr-9
+                text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 transition-all"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
             )}
           </div>
+
+          {/* Right controls */}
+          {mounted && (
+            <div className="flex items-center gap-2 ml-auto flex-none">
+
+              {/* ── View controls group ── */}
+              <div className="flex items-center gap-1 bg-muted/40 rounded-xl p-1">
+                {/* Density picker */}
+                {DENSITY_OPTIONS.map(({ value, icon, label }) => (
+                  <button
+                    key={value}
+                    onClick={() => setDensity(value)}
+                    title={label}
+                    className={`p-2 rounded-lg transition-colors ${
+                      density === value
+                        ? "bg-background shadow-sm text-foreground"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {icon}
+                  </button>
+                ))}
+
+                <div className="w-px h-5 bg-border/60 mx-0.5" />
+
+                {/* Cover layout */}
+                <button
+                  onClick={() => setCoverLayout("portrait")}
+                  title="縦長カバー"
+                  className={`p-2 rounded-lg transition-colors ${
+                    coverLayout === "portrait"
+                      ? "bg-background shadow-sm text-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <RectangleVertical className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setCoverLayout("landscape")}
+                  title="横長カバー"
+                  className={`p-2 rounded-lg transition-colors ${
+                    coverLayout === "landscape"
+                      ? "bg-background shadow-sm text-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <RectangleHorizontal className="w-4 h-4" />
+                </button>
+
+                <div className="w-px h-5 bg-border/60 mx-0.5" />
+
+                {/* Display fields toggle */}
+                <div className="relative">
+                  <button
+                    onClick={() => setShowDisplayPanel((v) => !v)}
+                    title="表示項目"
+                    className={`p-2 rounded-lg transition-colors ${
+                      showDisplayPanel
+                        ? "bg-background shadow-sm text-primary"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <SlidersHorizontal className="w-4 h-4" />
+                  </button>
+                  {showDisplayPanel && <DisplaySettingsPanel onClose={closePanel} />}
+                </div>
+              </div>
+
+              {/* Theme */}
+              <div className="flex items-center bg-muted/40 rounded-xl p-1">
+                {(["light", "dark", "system"] as const).map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => setTheme(t)}
+                    title={t === "light" ? "ライト" : t === "dark" ? "ダーク" : "システム"}
+                    className={`p-2 rounded-lg transition-colors ${
+                      theme === t
+                        ? "bg-background shadow-sm text-foreground"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {t === "light" ? <Sun className="w-4 h-4" /> : t === "dark" ? <Moon className="w-4 h-4" /> : <Monitor className="w-4 h-4" />}
+                  </button>
+                ))}
+              </div>
+
+              {/* Nav icons */}
+              <div className="flex items-center gap-0.5 border-l border-border/50 pl-2">
+                <NavIcon href="/import"     icon={<HardDriveUpload className="w-4.5 h-4.5 text-blue-400" />}    title="インポート" />
+                <NavIcon href="/organize"   icon={<TableProperties className="w-4.5 h-4.5 text-violet-400" />}  title="一括整理" />
+                <NavIcon href="/duplicates" icon={<Copy className="w-4.5 h-4.5 text-rose-400" />}              title="重複作品" />
+                <NavIcon href="/triage"     icon={<AlertTriangle className="w-4.5 h-4.5 text-amber-400" />}     title="トリアージ" />
+                <NavIcon href="/jobs"       icon={<Activity className="w-4.5 h-4.5" />}                         title="ジョブ" />
+                <NavIcon href="/history"    icon={<Clock className="w-4.5 h-4.5" />}                            title="履歴" />
+                <NavIcon href="/settings"   icon={<Settings2 className="w-4.5 h-4.5" />}                        title="設定" />
+              </div>
+            </div>
+          )}
         </div>
       </header>
 
-      {/* Main Content Area */}
-      <div className="flex-1 w-full px-4 md:px-6 py-6">
+      {/* ── MediaType filter tabs ── */}
+      <div className="w-full border-b border-border/40 bg-background/80 backdrop-blur sticky top-16 z-40">
+        <div className="container px-4 md:px-6 flex items-center gap-1 overflow-x-auto scrollbar-none h-10">
+          {MEDIA_TYPE_TABS.map(({ value, label }) => (
+            <button
+              key={value ?? "all"}
+              onClick={() => setMediaTypeFilter(value)}
+              className={`flex-none px-3 py-1.5 rounded-lg text-[13px] font-medium transition-colors
+                ${mediaTypeFilter === value
+                  ? "bg-primary/10 text-primary"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Gallery */}
+      <div className="flex-1 w-full px-4 md:px-6 py-5">
         <GalleryGrid />
       </div>
+
+      <JobQueuePanel />
     </main>
+  );
+}
+
+function NavIcon({ href, icon, title }: { href: string; icon: React.ReactNode; title: string }) {
+  return (
+    <Link
+      href={href}
+      title={title}
+      className="p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+    >
+      {icon}
+    </Link>
   );
 }

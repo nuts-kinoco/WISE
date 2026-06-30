@@ -116,8 +116,9 @@ builder.Services.AddScoped<ICoverProvider, VideoThumbnailCoverProvider>();
 builder.Services.AddScoped<ICoverProvider, DefaultCoverProvider>();
 builder.Services.AddScoped<FFmpegThumbnailService>();
 
-// Media viewers (Strategy per MediaType)
+// Media viewers (Strategy per MediaType — no switch/if on MediaType in Application/Domain)
 builder.Services.AddScoped<IMediaViewer, VideoMediaViewer>();
+builder.Services.AddScoped<IMediaViewer, ComicMediaViewer>();
 
 var app = builder.Build();
 

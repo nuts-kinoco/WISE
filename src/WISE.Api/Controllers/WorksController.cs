@@ -33,7 +33,12 @@ namespace WISE.Api.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetWorks([FromQuery] int page = 1, [FromQuery] int pageSize = 50, [FromQuery] string? q = null, [FromQuery] string? status = null)
+        public async Task<IActionResult> GetWorks(
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 50,
+            [FromQuery] string? q = null,
+            [FromQuery] string? status = null,
+            [FromQuery] string? mediaType = null)
         {
             var query = _dbContext.Works
                 .AsNoTracking()
@@ -50,6 +55,17 @@ namespace WISE.Api.Controllers
                     .ToList();
                 if (statuses.Count > 0)
                     query = query.Where(w => statuses.Contains(w.Status));
+            }
+
+            if (!string.IsNullOrWhiteSpace(mediaType))
+            {
+                var types = mediaType.Split(',')
+                    .Select(t => Enum.TryParse<WISE.Domain.Enums.MediaType>(t.Trim(), true, out var mt) ? mt : (WISE.Domain.Enums.MediaType?)null)
+                    .Where(mt => mt.HasValue)
+                    .Select(mt => mt!.Value)
+                    .ToList();
+                if (types.Count > 0)
+                    query = query.Where(w => types.Contains(w.MediaType));
             }
 
             if (!string.IsNullOrWhiteSpace(q))
@@ -72,31 +88,44 @@ namespace WISE.Api.Controllers
                 .Take(pageSize)
                 .ToListAsync();
 
-            var works = rawWorks.Select(w => new
+            var works = rawWorks.Select(w =>
             {
-                w.Id,
-                w.PrimaryIdentifier,
-                Title = w.MetadataFields.FirstOrDefault(m => m.FieldName == "Title" && m.IsPrimary)?.Value
-                     ?? w.MetadataFields.FirstOrDefault(m => m.FieldName == "Title")?.Value,
-                Actress = w.MetadataFields.FirstOrDefault(m => m.FieldName == "Actress" && m.IsPrimary)?.Value
-                       ?? w.MetadataFields.FirstOrDefault(m => m.FieldName == "Actress")?.Value,
-                Maker = w.MetadataFields.FirstOrDefault(m => m.FieldName == "Maker" && m.IsPrimary)?.Value
-                     ?? w.MetadataFields.FirstOrDefault(m => m.FieldName == "Maker")?.Value,
-                Label = w.MetadataFields.FirstOrDefault(m => m.FieldName == "Label" && m.IsPrimary)?.Value
-                     ?? w.MetadataFields.FirstOrDefault(m => m.FieldName == "Label")?.Value,
-                ReleaseDate = w.MetadataFields.FirstOrDefault(m => m.FieldName == "ReleaseDate" && m.IsPrimary)?.Value
-                           ?? w.MetadataFields.FirstOrDefault(m => m.FieldName == "ReleaseDate")?.Value,
-                CoverUrl = ResolveMediaUrl(
-                    w.MetadataFields.FirstOrDefault(m => m.FieldName == "PortraitCover" && m.IsPrimary)?.Value
-                    ?? w.MetadataFields.FirstOrDefault(m => m.FieldName == "Cover" && m.IsPrimary)?.Value,
-                    w.Assets),
-                CoverLandscapeUrl = ResolveMediaUrl(
-                    w.MetadataFields.FirstOrDefault(m => m.FieldName == "LandscapeCover" && m.IsPrimary)?.Value
-                    ?? w.MetadataFields.FirstOrDefault(m => m.FieldName == "CoverLandscape" && m.IsPrimary)?.Value,
-                    w.Assets),
-                MetadataStatus = w.Status.ToString(),
-                w.Favorite,
-                w.Rating
+                string? MetaFirst(params string[] names)
+                {
+                    foreach (var name in names)
+                    {
+                        var v = w.MetadataFields.FirstOrDefault(m => m.FieldName == name && m.IsPrimary)?.Value
+                             ?? w.MetadataFields.FirstOrDefault(m => m.FieldName == name)?.Value;
+                        if (v != null) return v;
+                    }
+                    return null;
+                }
+
+                return new
+                {
+                    w.Id,
+                    w.PrimaryIdentifier,
+                    MediaType = w.MediaType.ToString(),
+                    Title       = MetaFirst("Title"),
+                    Actress     = MetaFirst("Actress", "actress"),
+                    Maker       = MetaFirst("Maker", "maker"),
+                    Label       = MetaFirst("Label", "label"),
+                    ReleaseDate = MetaFirst("ReleaseDate", "release_date"),
+                    // Comic-specific
+                    Author      = MetaFirst("author", "Author", "Writer"),
+                    Circle      = MetaFirst("circle", "Circle"),
+                    PageCount   = MetaFirst("page_count", "PageCount"),
+                    Language    = MetaFirst("language", "Language", "LanguageISO"),
+                    CoverUrl = ResolveMediaUrl(
+                        MetaFirst("PortraitCover", "Cover") ?? $"/api/works/{w.Id}/cover",
+                        w.Assets),
+                    CoverLandscapeUrl = ResolveMediaUrl(
+                        MetaFirst("LandscapeCover", "CoverLandscape"),
+                        w.Assets),
+                    MetadataStatus = w.Status.ToString(),
+                    w.Favorite,
+                    w.Rating
+                };
             }).ToList();
 
             return Ok(new
