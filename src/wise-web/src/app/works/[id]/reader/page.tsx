@@ -17,6 +17,34 @@ import { useDeviceId } from "@/hooks/useDeviceId";
 
 type ReadingDirection = "rtl" | "ltr";
 type PageMode = "single" | "double";
+type ResizeFilter = "bilinear" | "bicubic" | "lanczos";
+type ImageFilter = "none" | "soft" | "soft-sharp";
+
+const RESIZE_FILTER_LABELS: Record<ResizeFilter, string> = {
+  bilinear: "バイリニア",
+  bicubic: "バイキュービック",
+  lanczos: "ランチョス",
+};
+
+const IMAGE_FILTER_LABELS: Record<ImageFilter, string> = {
+  none: "なし",
+  soft: "ソフト",
+  "soft-sharp": "ソフト＋シャープ",
+};
+
+// CSS image-rendering values per filter
+const IMAGE_RENDERING: Record<ResizeFilter, string> = {
+  bilinear: "auto",
+  bicubic: "-webkit-optimize-contrast",
+  lanczos: "high-quality",
+};
+
+// CSS filter values (soft-sharp uses the SVG filter defined inline)
+const CSS_FILTER: Record<ImageFilter, string> = {
+  none: "",
+  soft: "blur(0.5px)",
+  "soft-sharp": "url(#reader-sharpen)",
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Page component
@@ -48,7 +76,32 @@ export default function ReaderPage({ params }: { params: Promise<{ id: string }>
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // Reader display preferences (persisted in localStorage)
+  const [readerCacheMb, setReaderCacheMb] = useState<number>(1024);
+  const [resizeFilter, setResizeFilter] = useState<ResizeFilter>("bilinear");
+  const [imageFilter, setImageFilter] = useState<ImageFilter>("none");
+
   const totalPages = data?.totalPages ?? 0;
+
+  // Load reader prefs from localStorage on mount
+  useEffect(() => {
+    const mb = parseInt(localStorage.getItem("wise_reader_cache_mb") ?? "1024", 10);
+    setReaderCacheMb(Number.isFinite(mb) && mb > 0 ? mb : 1024);
+    const rf = localStorage.getItem("wise_reader_resize_filter") ?? "bilinear";
+    if (rf === "bilinear" || rf === "bicubic" || rf === "lanczos") setResizeFilter(rf);
+    const imf = localStorage.getItem("wise_reader_image_filter") ?? "none";
+    if (imf === "none" || imf === "soft" || imf === "soft-sharp") setImageFilter(imf);
+  }, []);
+
+  const saveResizeFilter = (v: ResizeFilter) => {
+    setResizeFilter(v);
+    localStorage.setItem("wise_reader_resize_filter", v);
+  };
+
+  const saveImageFilter = (v: ImageFilter) => {
+    setImageFilter(v);
+    localStorage.setItem("wise_reader_image_filter", v);
+  };
 
   // Restore last-read page once both data and history are loaded
   useEffect(() => {
@@ -61,7 +114,6 @@ export default function ReaderPage({ params }: { params: Promise<{ id: string }>
   }, [data, history, resumedFromHistory]);
 
   // Debounced save: write to backend 2s after page change
-  // When reaching the last page, set positionPercent=1.0 so HomeController excludes it from "続きを見る"
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (!resumedFromHistory || !deviceId) return;
@@ -145,31 +197,34 @@ export default function ReaderPage({ params }: { params: Promise<{ id: string }>
     return () => document.removeEventListener("fullscreenchange", handler);
   }, []);
 
-  // ── Prefetch adjacent pages ─────────────────────────────────────────────────
+  // ── Prefetch adjacent pages (window based on cache MB setting) ──────────────
 
   useEffect(() => {
     if (!data) return;
+    // Assume ~10MB per page; cap at 50 pages
+    const prefetchWindow = Math.min(50, Math.max(2, Math.floor(readerCacheMb / 10)));
     const prefetch = (page: number) => {
       if (page >= 0 && page < totalPages) {
         const img = new window.Image();
         img.src = getReaderPageUrl(id, page);
       }
     };
-    prefetch(currentPage + 1);
-    prefetch(currentPage + 2);
+    for (let i = 1; i <= prefetchWindow; i++) prefetch(currentPage + i);
     prefetch(currentPage - 1);
-  }, [id, currentPage, totalPages, data]);
+  }, [id, currentPage, totalPages, data, readerCacheMb]);
 
   // ── Render pages ────────────────────────────────────────────────────────────
-
-  const rightPageIndex = direction === "rtl" ? currentPage : currentPage;
-  const leftPageIndex  = direction === "rtl" ? currentPage + 1 : currentPage - 1;
 
   const pageIndexes: number[] = pageMode === "double"
     ? (direction === "rtl"
         ? [currentPage + 1, currentPage].filter((p) => p >= 0 && p < totalPages)
         : [currentPage, currentPage + 1].filter((p) => p >= 0 && p < totalPages))
     : [currentPage];
+
+  const imgStyle: React.CSSProperties = {
+    imageRendering: IMAGE_RENDERING[resizeFilter] as React.CSSProperties["imageRendering"],
+    ...(CSS_FILTER[imageFilter] ? { filter: CSS_FILTER[imageFilter] } : {}),
+  };
 
   // ─────────────────────────────────────────────────────────────────────────
 
@@ -193,6 +248,19 @@ export default function ReaderPage({ params }: { params: Promise<{ id: string }>
       onMouseMove={resetHideTimer}
       onClick={resetHideTimer}
     >
+      {/* SVG filter definitions for soft-sharp mode */}
+      <svg style={{ position: "absolute", width: 0, height: 0, overflow: "hidden" }} aria-hidden>
+        <defs>
+          <filter id="reader-sharpen" colorInterpolationFilters="sRGB">
+            <feConvolveMatrix
+              order="3"
+              kernelMatrix="-1 -1 -1  -1 9 -1  -1 -1 -1"
+              preserveAlpha="true"
+            />
+          </filter>
+        </defs>
+      </svg>
+
       {/* ── Top bar ── */}
       <div className={`absolute top-0 inset-x-0 z-50 flex items-center gap-3 px-4 py-3
         bg-gradient-to-b from-black/80 to-transparent transition-opacity duration-300
@@ -227,7 +295,8 @@ export default function ReaderPage({ params }: { params: Promise<{ id: string }>
 
       {/* ── Settings panel ── */}
       {showSettings && (
-        <div className="absolute top-14 right-4 z-50 bg-neutral-900 border border-white/10 rounded-xl p-4 flex flex-col gap-3 min-w-[200px]">
+        <div className="absolute top-14 right-4 z-50 bg-neutral-900 border border-white/10 rounded-xl p-4 flex flex-col gap-3 min-w-[220px]">
+          {/* Direction */}
           <div className="flex items-center justify-between">
             <span className="text-white/70 text-sm">読む方向</span>
             <div className="flex gap-1">
@@ -243,6 +312,7 @@ export default function ReaderPage({ params }: { params: Promise<{ id: string }>
               ))}
             </div>
           </div>
+          {/* Page mode */}
           <div className="flex items-center justify-between">
             <span className="text-white/70 text-sm">表示モード</span>
             <div className="flex gap-1">
@@ -262,6 +332,32 @@ export default function ReaderPage({ params }: { params: Promise<{ id: string }>
               </button>
             </div>
           </div>
+          {/* Resize filter */}
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-white/70 text-sm shrink-0">リサイズ</span>
+            <select
+              value={resizeFilter}
+              onChange={(e) => saveResizeFilter(e.target.value as ResizeFilter)}
+              className="bg-white/10 text-white/80 text-xs rounded-lg px-2 py-1 focus:outline-none cursor-pointer"
+            >
+              {(Object.keys(RESIZE_FILTER_LABELS) as ResizeFilter[]).map((k) => (
+                <option key={k} value={k} className="bg-neutral-900">{RESIZE_FILTER_LABELS[k]}</option>
+              ))}
+            </select>
+          </div>
+          {/* Image filter */}
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-white/70 text-sm shrink-0">フィルター</span>
+            <select
+              value={imageFilter}
+              onChange={(e) => saveImageFilter(e.target.value as ImageFilter)}
+              className="bg-white/10 text-white/80 text-xs rounded-lg px-2 py-1 focus:outline-none cursor-pointer"
+            >
+              {(Object.keys(IMAGE_FILTER_LABELS) as ImageFilter[]).map((k) => (
+                <option key={k} value={k} className="bg-neutral-900">{IMAGE_FILTER_LABELS[k]}</option>
+              ))}
+            </select>
+          </div>
           <div className="text-white/30 text-[11px] border-t border-white/10 pt-2">
             ← → ページ移動　F フルスクリーン　D 2P切替
           </div>
@@ -270,7 +366,7 @@ export default function ReaderPage({ params }: { params: Promise<{ id: string }>
 
       {/* ── Page display area ── */}
       <div className="flex-1 flex items-center justify-center overflow-hidden">
-        <div className={`flex h-full w-full max-h-screen ${pageMode === "double" ? "gap-0.5" : "justify-center"}`}>
+        <div className={`flex h-full w-full max-h-screen ${pageMode === "double" ? "" : "justify-center"}`}>
           {pageIndexes.map((pi) => (
             <div
               key={pi}
@@ -282,6 +378,7 @@ export default function ReaderPage({ params }: { params: Promise<{ id: string }>
                 alt={`Page ${pi + 1}`}
                 fill
                 className="object-contain"
+                style={imgStyle}
                 unoptimized
                 priority={pi === currentPage}
               />
@@ -292,13 +389,11 @@ export default function ReaderPage({ params }: { params: Promise<{ id: string }>
 
       {/* ── Click zones for navigation ── */}
       <div className="absolute inset-0 flex pointer-events-none z-20">
-        {/* Left zone → retreat in RTL, advance in LTR */}
         <button
           className="flex-1 h-full pointer-events-auto cursor-pointer"
           onClick={retreat}
           aria-label="前のページ"
         />
-        {/* Right zone → advance in RTL, advance in LTR */}
         <button
           className="flex-1 h-full pointer-events-auto cursor-pointer"
           onClick={advance}
@@ -315,7 +410,6 @@ export default function ReaderPage({ params }: { params: Promise<{ id: string }>
           <ChevronLeft className="w-5 h-5" />
         </button>
 
-        {/* Scrubber */}
         <input
           type="range"
           min={0}
