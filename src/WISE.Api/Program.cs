@@ -106,11 +106,13 @@ builder.Services.AddScoped<IArchiveReader, ZipArchiveReader>();
 builder.Services.AddScoped<IArchiveReader, RarArchiveReader>();
 builder.Services.AddScoped<IArchiveReader, FolderArchiveReader>();
 builder.Services.AddScoped<IArchiveReader, PdfArchiveReader>();
+builder.Services.AddScoped<IArchiveReader, EpubArchiveReader>();
 builder.Services.AddScoped<ArchiveReaderSelector>();
 
 // Cover providers (Chain of Responsibility)
 builder.Services.AddScoped<ICoverProviderChain, CoverProviderChain>();
 builder.Services.AddScoped<ICoverProvider, AssetCoverProvider>();
+builder.Services.AddScoped<ICoverProvider, EpubCoverProvider>();
 builder.Services.AddScoped<ICoverProvider, ArchiveCoverProvider>();
 builder.Services.AddScoped<ICoverProvider, VideoThumbnailCoverProvider>();
 builder.Services.AddScoped<ICoverProvider, DefaultCoverProvider>();
@@ -119,6 +121,7 @@ builder.Services.AddScoped<FFmpegThumbnailService>();
 // Media viewers (Strategy per MediaType — no switch/if on MediaType in Application/Domain)
 builder.Services.AddScoped<IMediaViewer, VideoMediaViewer>();
 builder.Services.AddScoped<IMediaViewer, ComicMediaViewer>();
+builder.Services.AddScoped<IMediaViewer, BookMediaViewer>();
 
 var app = builder.Build();
 

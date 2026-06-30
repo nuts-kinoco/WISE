@@ -119,6 +119,10 @@ export function getReaderPageUrl(workId: string, pageIndex: number): string {
   return `${API_BASE_URL}/works/${workId}/reader/pages/${pageIndex}`;
 }
 
+export function getEpubUrl(workId: string): string {
+  return `${API_BASE_URL}/works/${workId}/epub`;
+}
+
 // ── Viewer Info API ────────────────────────────────────────────────────────
 
 export interface ViewerInfo {

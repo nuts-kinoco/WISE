@@ -707,5 +707,30 @@ namespace WISE.Api.Controllers
                 }
             });
         }
+
+        [HttpGet("{id}/epub")]
+        public async Task<IActionResult> GetEpub(string id, CancellationToken ct)
+        {
+            if (!Guid.TryParse(id, out var workId))
+                return BadRequest("Invalid Work ID format.");
+
+            var work = await _dbContext.Works
+                .AsNoTracking()
+                .Include(w => w.Assets)
+                .FirstOrDefaultAsync(w => w.Id == workId, ct);
+
+            if (work == null) return NotFound();
+
+            var epubAsset = work.Assets.FirstOrDefault(a =>
+                System.IO.Path.GetExtension(a.FilePath).Equals(".epub", StringComparison.OrdinalIgnoreCase)
+                && System.IO.File.Exists(a.FilePath));
+
+            if (epubAsset == null) return NotFound("No EPUB asset found for this work.");
+
+            var stream = System.IO.File.OpenRead(epubAsset.FilePath);
+            Response.Headers["Content-Disposition"] =
+                $"inline; filename=\"{System.IO.Path.GetFileName(epubAsset.FilePath)}\"";
+            return File(stream, "application/epub+zip", enableRangeProcessing: true);
+        }
     }
 }
