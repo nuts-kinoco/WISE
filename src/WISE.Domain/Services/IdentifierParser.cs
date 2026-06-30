@@ -26,9 +26,17 @@ public static class IdentifierParser
     private static readonly Regex DateRegex =
         new(@"\b(\d{6})-(\d{3,})\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-    // 同人 (RJ形式: RJ123456)
+    // DLSite 同人 RJ (例: RJ123456, RJ01234567)
     private static readonly Regex RjRegex =
         new(@"\b(RJ\d{6,})\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    // DLSite VJ/BJ (VJ=PCゲーム, BJ=書籍/コミック)
+    private static readonly Regex VjBjRegex =
+        new(@"\b(VJ\d{6,}|BJ\d{6,})\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    // FANZA同人 (例: d_123456, d123456)
+    private static readonly Regex FanzaDoujinRegex =
+        new(@"\b(d_?\d{5,})\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     /// <summary>
     /// ファイル名から Identifier 候補を全て抽出して返す。
@@ -38,7 +46,15 @@ public static class IdentifierParser
     {
         var results = new List<IdentifierCandidate>();
 
-        // RJ を先に評価（CommercialRegex にも合致するため）
+        // VJ/BJ を先に評価（CommercialRegex にも合致するため）
+        var vjbjMatch = VjBjRegex.Match(fileName);
+        if (vjbjMatch.Success)
+        {
+            results.Add(new IdentifierCandidate("DLSiteVJBJPattern", vjbjMatch.Value.ToUpper()));
+            return results;
+        }
+
+        // RJ を次に評価（CommercialRegex にも合致するため）
         var rjMatch = RjRegex.Match(fileName);
         if (rjMatch.Success)
         {
@@ -47,10 +63,13 @@ public static class IdentifierParser
         }
 
         // FC2 を次に評価（CommercialRegex より優先）
+        // FC2-1234567 は FC2-PPV-1234567 に正規化する
         var fc2Match = Fc2Regex.Match(fileName);
         if (fc2Match.Success)
         {
-            results.Add(new IdentifierCandidate("FC2Pattern", fc2Match.Value.ToUpper()));
+            var numericId = fc2Match.Groups[2].Value;
+            var normalized = $"FC2-PPV-{numericId}";
+            results.Add(new IdentifierCandidate("FC2Pattern", normalized));
             return results;
         }
 
@@ -62,6 +81,15 @@ public static class IdentifierParser
             return results;
         }
 
+        // FANZA同人 (例: d_123456)
+        var fanzaMatch = FanzaDoujinRegex.Match(fileName);
+        if (fanzaMatch.Success)
+        {
+            var normalized = NormalizeFanzaId(fanzaMatch.Value);
+            results.Add(new IdentifierCandidate("FanzaDoujinPattern", normalized));
+            return results;
+        }
+
         // 汎用商業AV（ホワイトリストなし）
         var commercialMatch = CommercialRegex.Match(fileName);
         if (commercialMatch.Success)
@@ -70,5 +98,12 @@ public static class IdentifierParser
         }
 
         return results;
+    }
+
+    private static string NormalizeFanzaId(string raw)
+    {
+        if (raw.StartsWith("d_", StringComparison.OrdinalIgnoreCase))
+            return raw.ToLower();
+        return "d_" + raw[1..].ToLower();
     }
 }

@@ -1,4 +1,5 @@
-﻿using System.Threading.Tasks;
+﻿using System.Linq;
+using System.Threading.Tasks;
 using WISE.Domain.Services;
 using Xunit;
 using FluentAssertions;
@@ -31,8 +32,18 @@ public class IdentifierParserTests
     // ===== FC2Pattern =====
 
     [Theory]
-    [InlineData("FC2-PPV-1234567.mp4",  "FC2-PPV-1234567", "FC2Pattern")]
-    [InlineData("FC2-PPV-9999999.mp4",  "FC2-PPV-9999999", "FC2Pattern")]
+    [InlineData("FC2-PPV-1234567.mp4",       "FC2-PPV-1234567", "FC2Pattern")]
+    [InlineData("FC2-PPV-9999999.mp4",       "FC2-PPV-9999999", "FC2Pattern")]
+    // FC2-NNNNNNN (PPV なし) → FC2-PPV-NNNNNNN に正規化
+    [InlineData("FC2-9401364.mp4",           "FC2-PPV-9401364", "FC2Pattern")]
+    [InlineData("FC2-1234567.mp4",           "FC2-PPV-1234567", "FC2Pattern")]
+    [InlineData("fc2-9401364.mp4",           "FC2-PPV-9401364", "FC2Pattern")]
+    // 連番サフィックス (-01, -02 など) は剥がして同一識別子に集約される
+    [InlineData("FC2-PPV-4409072-01.mp4",    "FC2-PPV-4409072", "FC2Pattern")]
+    [InlineData("FC2-PPV-4409072-02.mp4",    "FC2-PPV-4409072", "FC2Pattern")]
+    [InlineData("FC2-PPV-4409072-03.mp4",    "FC2-PPV-4409072", "FC2Pattern")]
+    [InlineData("fc2-ppv-4409072-01.mp4",    "FC2-PPV-4409072", "FC2Pattern")]  // lowercase
+    [InlineData("FC2-PPV-4409072-01_720p.mp4", "FC2-PPV-4409072", "FC2Pattern")] // extra suffix
     public void ExtractCandidates_ShouldMatch_FC2Pattern(
         string fileName, string expectedValue, string expectedPattern)
     {
@@ -40,6 +51,22 @@ public class IdentifierParserTests
         candidates.Should().HaveCount(1);
         candidates[0].ExtractedValue.Should().Be(expectedValue);
         candidates[0].PatternName.Should().Be(expectedPattern);
+    }
+
+    [Theory]
+    [InlineData("FC2-PPV-4409072-01.mp4", "FC2-PPV-4409072")]
+    [InlineData("FC2-PPV-4409072-02.mp4", "FC2-PPV-4409072")]
+    public async Task IdentifierResolver_FC2SerialFiles_ShouldResolveToSameIdentifier(
+        string fileName, string expectedIdentifier)
+    {
+        var resolver = new IdentifierResolver(
+            new[] { new WISE.Domain.Providers.FileNameEvidenceProvider() });
+
+        var asset = new WISE.Domain.Entities.Asset($"/lib/{fileName}", fileName, 4_000_000_000L);
+        var result = await resolver.ResolveAsync(asset);
+
+        result.Decision.Should().Be(WISE.Domain.ValueObjects.Decision.New);
+        result.ExtractedIdentifier.Should().Be(expectedIdentifier);
     }
 
     // ===== RJPattern =====
@@ -54,6 +81,64 @@ public class IdentifierParserTests
         candidates.Should().HaveCount(1);
         candidates[0].ExtractedValue.Should().Be(expectedValue);
         candidates[0].PatternName.Should().Be(expectedPattern);
+    }
+
+    // ===== DLSiteVJBJPattern =====
+
+    [Theory]
+    [InlineData("VJ012345.zip",   "VJ012345", "DLSiteVJBJPattern")]
+    [InlineData("BJ123456.cbz",   "BJ123456", "DLSiteVJBJPattern")]
+    [InlineData("[VJ012345] ゲームタイトル.zip", "VJ012345", "DLSiteVJBJPattern")]
+    public void ExtractCandidates_ShouldMatch_VJBJPattern(
+        string fileName, string expectedValue, string expectedPattern)
+    {
+        var candidates = IdentifierParser.ExtractCandidates(fileName);
+        candidates.Should().HaveCount(1);
+        candidates[0].ExtractedValue.Should().Be(expectedValue);
+        candidates[0].PatternName.Should().Be(expectedPattern);
+    }
+
+    // ===== FanzaDoujinPattern =====
+
+    [Theory]
+    [InlineData("d_123456.zip",   "d_123456", "FanzaDoujinPattern")]
+    [InlineData("d_987654.cbz",   "d_987654", "FanzaDoujinPattern")]
+    public void ExtractCandidates_ShouldMatch_FanzaDoujinPattern(
+        string fileName, string expectedValue, string expectedPattern)
+    {
+        var candidates = IdentifierParser.ExtractCandidates(fileName);
+        candidates.Should().HaveCount(1);
+        candidates[0].ExtractedValue.Should().Be(expectedValue);
+        candidates[0].PatternName.Should().Be(expectedPattern);
+    }
+
+    // ===== PathEvidenceProvider =====
+
+    [Fact]
+    public async Task PathEvidenceProvider_ShouldExtract_RJFromFolderName()
+    {
+        var provider = new WISE.Domain.Providers.PathEvidenceProvider();
+        var asset = new WISE.Domain.Entities.Asset(
+            @"C:\doujin\RJ123456 作品タイトル\RJ123456.cbz",
+            "RJ123456.cbz", 1024L);
+
+        var evidences = (await provider.CollectEvidencesAsync(asset)).ToList();
+
+        evidences.Should().NotBeEmpty();
+        evidences.Should().Contain(e => e.Value == "RJ123456");
+    }
+
+    [Fact]
+    public async Task PathEvidenceProvider_ShouldReturnEmpty_ForUnknownFolderName()
+    {
+        var provider = new WISE.Domain.Providers.PathEvidenceProvider();
+        var asset = new WISE.Domain.Entities.Asset(
+            @"C:\doujin\Some Random Folder\file.cbz",
+            "file.cbz", 1024L);
+
+        var evidences = (await provider.CollectEvidencesAsync(asset)).ToList();
+
+        evidences.Should().BeEmpty();
     }
 
     // ===== DatePattern =====

@@ -64,8 +64,10 @@ builder.Services.AddSingleton<WISE.Domain.Interfaces.IOutputPathResolver, WISE.I
 builder.Services.AddScoped<WISE.Infrastructure.Services.FFmpegThumbnailService>();
 
 // Sprint 13: Evidence-Based Identifier Resolution Pipeline
-// IEvidenceProvider は複数登録可能。将来 PathEvidenceProvider / MetadataHintProvider を追加する場合はここに追記する。
+// IEvidenceProvider は複数登録可能。優先度は登録順ではなく Score の合計で決まる。
 builder.Services.AddScoped<IEvidenceProvider, FileNameEvidenceProvider>();
+builder.Services.AddScoped<IEvidenceProvider, WISE.Domain.Providers.PathEvidenceProvider>();
+builder.Services.AddScoped<IEvidenceProvider, WISE.Infrastructure.Providers.ComicInfoXmlEvidenceProvider>();
 builder.Services.AddScoped<IIdentifierResolver, IdentifierResolver>();
 
 // Configure CORS
