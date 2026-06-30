@@ -7,7 +7,7 @@
 ---
 
 ## Sprint 23 — Sort（サーバーサイドソート）
-**Status: IN PROGRESS**
+**Status: DONE**
 
 density切替（compact/normal/rich/list）は Sprint 14-22 で実装済み。
 今 Sprint の核心は API / Store / UI への sort パラメータ追加。
@@ -26,7 +26,7 @@ density切替（compact/normal/rich/list）は Sprint 14-22 で実装済み。
 ---
 
 ## Sprint 24 — Dashboard Home
-**Status: PENDING**
+**Status: DONE**
 
 ### 実装
 - `GET /api/home?deviceId=` — 1リクエストで4データセット返却
@@ -42,7 +42,7 @@ density切替（compact/normal/rich/list）は Sprint 14-22 で実装済み。
 ---
 
 ## Sprint 25 — UX ポリッシュ（Empty / Loading / Error）
-**Status: PENDING**
+**Status: DONE**
 
 ### 実装
 - Empty State: Library Empty / Search Empty / Collection Empty

@@ -5,6 +5,7 @@ import { deleteWork, patchUserData, enqueueFetchMetadata, openFolder, fetchThumb
 import { resolveCoverUrl } from "@/lib/media";
 import { useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Loader2, ChevronDown, ChevronUp, Calendar, Clock, Building2, Tag, Film, Layers, Trash2, Heart, Star, RefreshCw, FolderOpen, Upload, Pencil, X, Plus, CheckCircle2, AlertCircle, History, BookOpen } from "lucide-react";
+import { Skeleton } from "@/components/ui/Skeleton";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -172,17 +173,44 @@ export default function WorkDetailPage({ params }: { params: Promise<{ id: strin
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-background">
-        <Loader2 className="w-12 h-12 animate-spin text-primary" />
+      <div className="min-h-screen bg-background">
+        <div className="sticky top-0 z-40 border-b border-border/40 bg-background/95 backdrop-blur px-4 h-14 flex items-center">
+          <Skeleton className="w-24 h-4" />
+        </div>
+        <div className="max-w-screen-xl mx-auto px-4 md:px-8 py-8 flex flex-col lg:flex-row gap-8">
+          {/* Cover skeleton */}
+          <div className="flex-none w-full lg:w-72 xl:w-80">
+            <Skeleton className="w-full aspect-[2/3] rounded-xl" />
+            <div className="mt-4 flex gap-2">
+              <Skeleton className="flex-1 h-9 rounded-xl" />
+              <Skeleton className="w-9 h-9 rounded-xl" />
+            </div>
+          </div>
+          {/* Info skeleton */}
+          <div className="flex-1 min-w-0 space-y-4">
+            <Skeleton className="h-7 w-4/5" />
+            <Skeleton className="h-5 w-2/5" />
+            <div className="mt-6 grid grid-cols-2 gap-3">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="space-y-1">
+                  <Skeleton className="h-3 w-16" />
+                  <Skeleton className="h-4 w-28" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
 
   if (isError || !work) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-background text-destructive">
-        <h1 className="text-3xl font-bold mb-4">作品が見つかりません</h1>
-        <Link href="/" className="text-primary hover:underline flex items-center gap-2">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-background gap-4">
+        <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center text-muted-foreground text-2xl">?</div>
+        <h1 className="text-xl font-semibold text-foreground">作品が見つかりません</h1>
+        <p className="text-sm text-muted-foreground">削除されたか、IDが間違っている可能性があります。</p>
+        <Link href="/" className="mt-2 flex items-center gap-2 text-sm text-primary hover:underline">
           <ArrowLeft className="w-4 h-4" /> ギャラリーに戻る
         </Link>
       </div>

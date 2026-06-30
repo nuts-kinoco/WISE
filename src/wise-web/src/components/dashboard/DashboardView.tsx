@@ -4,6 +4,7 @@ import { useCallback, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { Shuffle, Loader2, Library } from "lucide-react";
+import { Skeleton } from "@/components/ui/Skeleton";
 import { fetchHome, fetchRandomWork, type WorkItem } from "@/lib/api";
 import { useDeviceId } from "@/hooks/useDeviceId";
 import { DashboardCard } from "./DashboardCard";
@@ -117,8 +118,23 @@ export function DashboardView({ onSwitchToLibrary }: { onSwitchToLibrary: () => 
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-24">
-        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+      <div className="w-full max-w-screen-2xl mx-auto px-4 md:px-6 py-6">
+        {[8, 12, 8].map((count, si) => (
+          <section key={si} className="mb-8">
+            <Skeleton className="h-4 w-32 mb-3" />
+            <div className="flex gap-3 overflow-hidden">
+              {Array.from({ length: Math.min(count, 6) }).map((_, i) => (
+                <div key={i} className="flex-none w-36">
+                  <Skeleton className="w-full aspect-[2/3] rounded-lg" />
+                  <div className="mt-1.5 space-y-1">
+                    <Skeleton className="h-3 w-full" />
+                    <Skeleton className="h-3 w-2/3" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        ))}
       </div>
     );
   }
