@@ -23,6 +23,8 @@ public class WiseDbContext : DbContext, IUnitOfWork
     public DbSet<CoverCache> CoverCaches { get; set; } = null!;
     public DbSet<DisplayProfile> DisplayProfiles { get; set; } = null!;
     public DbSet<DisplayProfileField> DisplayProfileFields { get; set; } = null!;
+    public DbSet<Collection> Collections { get; set; } = null!;
+    public DbSet<CollectionItem> CollectionItems { get; set; } = null!;
 
     public WiseDbContext(DbContextOptions<WiseDbContext> options) : base(options)
     {
@@ -202,6 +204,27 @@ public class WiseDbContext : DbContext, IUnitOfWork
             entity.HasKey(e => e.Id);
             entity.HasIndex(e => new { e.ProfileId, e.FieldName }).IsUnique();
             entity.HasIndex(e => new { e.ProfileId, e.DisplayOrder });
+        });
+
+        modelBuilder.Entity<Collection>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
+            entity.HasMany(e => e.Items)
+                  .WithOne(i => i.Collection)
+                  .HasForeignKey(i => i.CollectionId)
+                  .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<CollectionItem>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => new { e.CollectionId, e.WorkId }).IsUnique();
+            entity.HasIndex(e => e.CollectionId);
+            entity.HasOne(e => e.Work)
+                  .WithMany()
+                  .HasForeignKey(e => e.WorkId)
+                  .OnDelete(DeleteBehavior.Cascade);
         });
     }
 

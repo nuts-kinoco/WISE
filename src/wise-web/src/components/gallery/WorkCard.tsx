@@ -7,6 +7,7 @@ import { patchUserData, type WorkItem } from "@/lib/api";
 import { useState } from "react";
 import { useGalleryStore, type DisplayField } from "@/store/useGalleryStore";
 import { resolveCoverUrl } from "@/lib/media";
+import { AddToCollectionMenu } from "./AddToCollectionMenu";
 
 interface Props {
   work: WorkItem;
@@ -148,13 +149,16 @@ export function WorkCard({ work, style }: Props) {
             </button>
           )}
 
-          {/* Status dot — top-right corner */}
-          {show("status") && (
-            <span
-              className={`absolute top-1.5 right-1.5 w-2 h-2 rounded-full shadow ${statusDot}`}
-              title={work.metadataStatus}
-            />
-          )}
+          {/* Collection + Status — top-right corner */}
+          <div className="absolute top-1.5 right-1.5 flex items-center gap-1">
+            <AddToCollectionMenu workId={work.id} />
+            {show("status") && (
+              <span
+                className={`w-2 h-2 rounded-full shadow ${statusDot}`}
+                title={work.metadataStatus}
+              />
+            )}
+          </div>
         </div>
 
         {/* ── Info strip (Normal / Rich only) ── */}

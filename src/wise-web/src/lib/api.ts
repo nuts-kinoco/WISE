@@ -397,6 +397,69 @@ export async function deleteReadingHistory(workId: string, deviceId: string): Pr
   );
 }
 
+// ── Collection API ─────────────────────────────────────────────────────────
+
+export interface CollectionSummary {
+  id: string;
+  name: string;
+  description: string | null;
+  createdAt: string;
+  updatedAt: string;
+  itemCount: number;
+}
+
+export interface CollectionDetail {
+  id: string;
+  name: string;
+  description: string | null;
+  createdAt: string;
+  updatedAt: string;
+  items: Array<{ id: string; order: number; addedAt: string; work: WorkItem }>;
+}
+
+export async function fetchCollections(): Promise<CollectionSummary[]> {
+  const res = await fetch(`${API_BASE_URL}/collections`);
+  if (!res.ok) throw new Error('Failed to fetch collections');
+  return res.json();
+}
+
+export async function fetchCollection(id: string): Promise<CollectionDetail> {
+  const res = await fetch(`${API_BASE_URL}/collections/${id}`);
+  if (!res.ok) throw new Error('Failed to fetch collection');
+  return res.json();
+}
+
+export async function createCollection(name: string, description?: string): Promise<CollectionSummary> {
+  const res = await fetch(`${API_BASE_URL}/collections`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, description }),
+  });
+  if (!res.ok) throw new Error('Failed to create collection');
+  return res.json();
+}
+
+export async function deleteCollection(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/collections/${id}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error('Failed to delete collection');
+}
+
+export async function addWorkToCollection(collectionId: string, workId: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/collections/${collectionId}/items`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ workId }),
+  });
+  if (!res.ok && res.status !== 409) throw new Error('Failed to add work to collection');
+}
+
+export async function removeWorkFromCollection(collectionId: string, workId: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/collections/${collectionId}/items/${workId}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) throw new Error('Failed to remove work from collection');
+}
+
 export async function deleteGenreTag(workId: string, tagValue: string): Promise<void> {
   const res = await fetch(`${API_BASE_URL}/works/${workId}/genre-tags/${encodeURIComponent(tagValue)}`, {
     method: 'DELETE',

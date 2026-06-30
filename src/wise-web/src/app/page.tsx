@@ -9,7 +9,7 @@ import {
   Search, Moon, Sun, Monitor, Settings2, HardDriveUpload,
   Clock, Activity, RectangleVertical, RectangleHorizontal,
   X, AlertTriangle, TableProperties, Copy, SlidersHorizontal,
-  List, Grid, LayoutGrid, Rows3, Home as HomeIcon, BookImage,
+  List, Grid, LayoutGrid, Rows3, Home as HomeIcon, BookImage, FolderHeart,
 } from "lucide-react";
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
@@ -223,7 +223,8 @@ export default function Home() {
 
               {/* Nav icons */}
               <div className="flex items-center gap-0.5 border-l border-border/50 pl-2">
-                <NavIcon href="/import"     icon={<HardDriveUpload className="w-4.5 h-4.5 text-blue-400" />}    title="インポート" />
+                <NavIcon href="/import"      icon={<HardDriveUpload className="w-4.5 h-4.5 text-blue-400" />}    title="インポート" />
+                <NavIcon href="/collections" icon={<FolderHeart className="w-4.5 h-4.5 text-emerald-400" />}   title="コレクション" />
                 <NavIcon href="/organize"   icon={<TableProperties className="w-4.5 h-4.5 text-violet-400" />}  title="一括整理" />
                 <NavIcon href="/duplicates" icon={<Copy className="w-4.5 h-4.5 text-rose-400" />}              title="重複作品" />
                 <NavIcon href="/triage"     icon={<AlertTriangle className="w-4.5 h-4.5 text-amber-400" />}     title="トリアージ" />

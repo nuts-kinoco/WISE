@@ -71,7 +71,7 @@ density切替（compact/normal/rich/list）は Sprint 14-22 で実装済み。
 ---
 
 ## Sprint 27 — Collection
-**Status: PENDING**
+**Status: DONE**
 
 ### 実装（唯一の DB 変更 Sprint）
 - `Collection` / `CollectionItem` Entity 追加
