@@ -13,10 +13,17 @@ namespace WISE.Domain.Services;
 /// </summary>
 public static class IdentifierParser
 {
-    // 商業AV汎用: EKDV, FTAV, IPX, SONE, SSIS, PRED など [A-Z]{2,6}[_-]\d{2,}
-    // ハイフン・アンダースコアの両方を許容し、常にハイフン正規化して返す。
-    private static readonly Regex CommercialRegex =
-        new(@"\b([A-Z]{2,6})[_-](\d{2,})\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    // ハイフン区切り: EKDV-775 / IPX-999 (2文字以上、2桁以上) — 最も広い許容範囲
+    private static readonly Regex CommercialHyphenRegex =
+        new(@"\b([A-Z]{2,6})-(\d{2,})\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    // アンダースコア区切り: EKDV_775 (4文字以上でカメラ命名規則 DSC_xxxx/IMG_xxxx を除外)
+    private static readonly Regex CommercialUnderscoreRegex =
+        new(@"\b([A-Z]{4,6})_(\d{2,})\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    // 区切りなし: EKDV775 (4文字以上 + 3桁以上で false-positive 抑制)
+    private static readonly Regex CommercialNoDelimRegex =
+        new(@"\b([A-Z]{4,6})(\d{3,})\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     // FC2 / FC2-PPV (例: FC2-PPV-1234567, FC2-1234567)
     private static readonly Regex Fc2Regex =
@@ -112,8 +119,12 @@ public static class IdentifierParser
             return results;
         }
 
-        // 汎用商業AV（ホワイトリストなし）。アンダースコアはハイフンに正規化。
-        var commercialMatch = CommercialRegex.Match(fileName);
+        // 汎用商業AV: ハイフン → アンダースコア(4文字以上) → 区切りなし(4文字以上) の優先順でマッチ
+        var commercialMatch = CommercialHyphenRegex.Match(fileName);
+        if (!commercialMatch.Success)
+            commercialMatch = CommercialUnderscoreRegex.Match(fileName);
+        if (!commercialMatch.Success)
+            commercialMatch = CommercialNoDelimRegex.Match(fileName);
         if (commercialMatch.Success)
         {
             var normalized = $"{commercialMatch.Groups[1].Value.ToUpper()}-{commercialMatch.Groups[2].Value}";

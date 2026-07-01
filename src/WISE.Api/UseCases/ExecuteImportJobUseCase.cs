@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -93,6 +94,19 @@ public class ExecuteImportJobUseCase
             // --- 2. IdentifierResolver で Evidence → Confidence → IdentifierResult ---
             var identifierResult = await _identifierResolver.ResolveAsync(tempAsset, cancellationToken);
             var identifier = identifierResult.ExtractedIdentifier;
+
+            // Book フォールバック: epub/pdf でパターン未マッチ → ファイル名 stem を識別子として使用
+            if (identifier.StartsWith("UNKNOWN-", StringComparison.OrdinalIgnoreCase))
+            {
+                var ext = Path.GetExtension(file).ToLowerInvariant();
+                if (ext is ".epub" or ".pdf")
+                {
+                    var stem = Path.GetFileNameWithoutExtension(file);
+                    stem = Regex.Replace(stem, @"[\\/:*?""<>|]", "-").Trim('-', ' ', '_');
+                    if (!string.IsNullOrWhiteSpace(stem))
+                        identifier = stem;
+                }
+            }
 
             // --- 3. Diagnostic を JSON で構築 ---
             var diagnosticPayload = JsonSerializer.Serialize(new
