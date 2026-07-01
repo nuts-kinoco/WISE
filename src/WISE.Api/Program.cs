@@ -22,7 +22,11 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
-builder.Services.AddMemoryCache();
+builder.Services.AddMemoryCache(options =>
+{
+    // 512MB 上限。各エントリが Size=bytes を報告することで上限が機能する。
+    options.SizeLimit = 512L * 1024 * 1024;
+});
 // Register UseCases and Services
 builder.Services.AddScoped<ImportUseCase>();
 builder.Services.AddScoped<CreateImportJobUseCase>();
