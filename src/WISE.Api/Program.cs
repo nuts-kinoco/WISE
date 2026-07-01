@@ -16,6 +16,7 @@ using WISE.Infrastructure.Cookies;
 using WISE.Infrastructure.Cover;
 using WISE.Infrastructure.Viewers;
 using WISE.Infrastructure.Archive;
+using WISE.Infrastructure.Http;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -49,6 +50,12 @@ builder.Services.Configure<WISE.Domain.Models.MetadataProviderOptions>("Fc2",
 builder.Services.Configure<WISE.Domain.Models.MetadataProviderOptions>("LocalNfo",
     builder.Configuration.GetSection("MetadataProviders:LocalNfo"));
 
+// Rate limiter (singleton — holds per-domain bucket state)
+builder.Services.AddSingleton<RateLimiterService>();
+// DelegatingHandlers — transient は HttpClient pipeline の規約
+builder.Services.AddTransient<RateLimitingHandler>();
+builder.Services.AddTransient<CachingHandler>();
+
 // Metadata providers — ConflictResolver が全Providerの結果をマージし、最高信頼度を primary とする
 // HTTP を使うプロバイダーは typed client として登録し Polly retry を適用する（3回、指数バックオフ）
 static IAsyncPolicy<System.Net.Http.HttpResponseMessage> MetadataRetryPolicy() =>
@@ -60,23 +67,48 @@ static IAsyncPolicy<System.Net.Http.HttpResponseMessage> MetadataRetryPolicy() =
 // Tier0: ローカル（Priority=100, 即時・信頼性最高）—— HTTP なし、通常登録
 builder.Services.AddScoped<IMetadataProvider, ComicInfoXmlMetadataProvider>(); // Priority=100
 builder.Services.AddScoped<IMetadataProvider, DoujinishiFilenameMetadataProvider>(); // Priority=50
-// Tier1: 公式・販売元 — typed HTTP client + Polly retry
-builder.Services.AddHttpClient<DLSiteMetadataProvider>().AddPolicyHandler(MetadataRetryPolicy());
+// Tier1: 公式・販売元 — CachingHandler (外) → RateLimitingHandler → Polly retry (内)
+// Cache hit なら rate limit も network も発生しない
+builder.Services.AddHttpClient<DLSiteMetadataProvider>()
+    .AddHttpMessageHandler<CachingHandler>()
+    .AddHttpMessageHandler<RateLimitingHandler>()
+    .AddPolicyHandler(MetadataRetryPolicy());
 builder.Services.AddScoped<IMetadataProvider>(sp => sp.GetRequiredService<DLSiteMetadataProvider>());
-builder.Services.AddHttpClient<FanzaMetadataProvider>().AddPolicyHandler(MetadataRetryPolicy());
+builder.Services.AddHttpClient<FanzaMetadataProvider>()
+    .AddHttpMessageHandler<CachingHandler>()
+    .AddHttpMessageHandler<RateLimitingHandler>()
+    .AddPolicyHandler(MetadataRetryPolicy());
 builder.Services.AddScoped<IMetadataProvider>(sp => sp.GetRequiredService<FanzaMetadataProvider>());
-builder.Services.AddHttpClient<GetchuMetadataProvider>().AddPolicyHandler(MetadataRetryPolicy());
+builder.Services.AddHttpClient<GetchuMetadataProvider>()
+    .AddHttpMessageHandler<CachingHandler>()
+    .AddHttpMessageHandler<RateLimitingHandler>()
+    .AddPolicyHandler(MetadataRetryPolicy());
 builder.Services.AddScoped<IMetadataProvider>(sp => sp.GetRequiredService<GetchuMetadataProvider>());
-builder.Services.AddHttpClient<MgsMetadataProvider>().AddPolicyHandler(MetadataRetryPolicy());
+builder.Services.AddHttpClient<MgsMetadataProvider>()
+    .AddHttpMessageHandler<CachingHandler>()
+    .AddHttpMessageHandler<RateLimitingHandler>()
+    .AddPolicyHandler(MetadataRetryPolicy());
 builder.Services.AddScoped<IMetadataProvider>(sp => sp.GetRequiredService<MgsMetadataProvider>());
-builder.Services.AddHttpClient<Fc2MetadataProvider>().AddPolicyHandler(MetadataRetryPolicy());
+builder.Services.AddHttpClient<Fc2MetadataProvider>()
+    .AddHttpMessageHandler<CachingHandler>()
+    .AddHttpMessageHandler<RateLimitingHandler>()
+    .AddPolicyHandler(MetadataRetryPolicy());
 builder.Services.AddScoped<IMetadataProvider>(sp => sp.GetRequiredService<Fc2MetadataProvider>());
 // Tier2: フォールバック補完
-builder.Services.AddHttpClient<Fc2AltMetadataProvider>().AddPolicyHandler(MetadataRetryPolicy());
+builder.Services.AddHttpClient<Fc2AltMetadataProvider>()
+    .AddHttpMessageHandler<CachingHandler>()
+    .AddHttpMessageHandler<RateLimitingHandler>()
+    .AddPolicyHandler(MetadataRetryPolicy());
 builder.Services.AddScoped<IMetadataProvider>(sp => sp.GetRequiredService<Fc2AltMetadataProvider>());
-builder.Services.AddHttpClient<AvWikiMetadataProvider>().AddPolicyHandler(MetadataRetryPolicy());
+builder.Services.AddHttpClient<AvWikiMetadataProvider>()
+    .AddHttpMessageHandler<CachingHandler>()
+    .AddHttpMessageHandler<RateLimitingHandler>()
+    .AddPolicyHandler(MetadataRetryPolicy());
 builder.Services.AddScoped<IMetadataProvider>(sp => sp.GetRequiredService<AvWikiMetadataProvider>());
-builder.Services.AddHttpClient<JavBusMetadataProvider>().AddPolicyHandler(MetadataRetryPolicy());
+builder.Services.AddHttpClient<JavBusMetadataProvider>()
+    .AddHttpMessageHandler<CachingHandler>()
+    .AddHttpMessageHandler<RateLimitingHandler>()
+    .AddPolicyHandler(MetadataRetryPolicy());
 builder.Services.AddScoped<IMetadataProvider>(sp => sp.GetRequiredService<JavBusMetadataProvider>());
 builder.Services.AddScoped<MetadataService>();
 builder.Services.AddScoped<IMetadataConflictResolver, MetadataConflictResolver>();

@@ -25,6 +25,7 @@ public class WiseDbContext : DbContext, IUnitOfWork
     public DbSet<DisplayProfileField> DisplayProfileFields { get; set; } = null!;
     public DbSet<Collection> Collections { get; set; } = null!;
     public DbSet<CollectionItem> CollectionItems { get; set; } = null!;
+    public DbSet<HttpCache> HttpCaches { get; set; } = null!;
 
     public WiseDbContext(DbContextOptions<WiseDbContext> options) : base(options)
     {
@@ -229,6 +230,15 @@ public class WiseDbContext : DbContext, IUnitOfWork
                   .WithMany()
                   .HasForeignKey(e => e.WorkId)
                   .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<HttpCache>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => e.Url).IsUnique();
+            entity.HasIndex(e => e.ExpiresAt);
+            entity.Property(e => e.Url).IsRequired();
+            entity.Property(e => e.Body).IsRequired();
         });
     }
 
