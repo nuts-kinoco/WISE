@@ -39,7 +39,7 @@ function getColumnCount(density: Density, isLandscape: boolean, width: number): 
 // Info strip heights per density (in px)
 const INFO_HEIGHT: Record<Density, number> = {
   compact: 0,
-  normal:  88,
+  normal:  0,
   rich:    148,
   list:    72,
 };

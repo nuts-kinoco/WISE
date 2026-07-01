@@ -51,6 +51,7 @@ export default function WorkDetailPage({ params }: { params: Promise<{ id: strin
   const [sampleIdx, setSampleIdx] = useState(0);
   const [videoTabIdx, setVideoTabIdx] = useState(0);
   const [historyExpanded, setHistoryExpanded] = useState(false);
+  const [assetsExpanded, setAssetsExpanded] = useState(false);
   const [rescraping, setRescraping] = useState(false);
   const [rescrapeMsg, setRescrapeMsg] = useState<string | null>(null);
   const [openingFolder, setOpeningFolder] = useState(false);
@@ -887,19 +888,32 @@ export default function WorkDetailPage({ params }: { params: Promise<{ id: strin
               {/* Assets list */}
               {work.assets.length > 0 && (
                 <div>
-                  <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">ファイル</p>
-                  <ul className="space-y-1.5">
-                    {work.assets.map((asset) => (
-                      <li key={asset.id} className="flex items-center justify-between text-xs bg-muted/40 border border-border/40 rounded-lg px-3 py-2">
-                        <span className="font-mono truncate text-foreground/80" title={asset.originalFilename}>
-                          {asset.originalFilename}
-                        </span>
-                        <span className="text-muted-foreground ml-3 shrink-0">
-                          {(asset.fileSize / 1024 / 1024 / 1024).toFixed(2)} GB
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
+                  <button
+                    onClick={() => setAssetsExpanded(v => !v)}
+                    className="flex items-center gap-1.5 mb-2 w-full text-left hover:opacity-80 transition-opacity"
+                  >
+                    <Layers className="w-3.5 h-3.5 text-muted-foreground" />
+                    <p className="text-xs text-muted-foreground uppercase tracking-wider flex-1">
+                      ファイル <span className="normal-case">({work.assets.length})</span>
+                    </p>
+                    {assetsExpanded
+                      ? <ChevronUp className="w-3 h-3 text-muted-foreground" />
+                      : <ChevronDown className="w-3 h-3 text-muted-foreground" />}
+                  </button>
+                  {assetsExpanded && (
+                    <ul className="space-y-1.5">
+                      {work.assets.map((asset) => (
+                        <li key={asset.id} className="flex items-center justify-between text-xs bg-muted/40 border border-border/40 rounded-lg px-3 py-2">
+                          <span className="font-mono truncate text-foreground/80" title={asset.originalFilename}>
+                            {asset.originalFilename}
+                          </span>
+                          <span className="text-muted-foreground ml-3 shrink-0">
+                            {(asset.fileSize / 1024 / 1024 / 1024).toFixed(2)} GB
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               )}
 

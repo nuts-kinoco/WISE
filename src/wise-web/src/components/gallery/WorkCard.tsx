@@ -108,25 +108,32 @@ export function WorkCard({ work, style }: Props) {
             </div>
           )}
 
-          {/* Compact hover overlay — title/actress over a gradient */}
-          {isCompact && (
-            <div className="absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-black/80 to-transparent
+          {/* Compact / Normal hover overlay — title/actress over a gradient */}
+          {!isRich && (
+            <div className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent
               opacity-0 group-hover:opacity-100 transition-opacity duration-200
-              flex flex-col justify-end px-2 pb-2 pointer-events-none"
+              flex flex-col justify-end pointer-events-none
+              ${isCompact ? "h-2/5 px-2 pb-2" : "h-1/3 px-3 pb-3"}`}
             >
               {work.title && (
-                <p className="text-white text-[10px] font-medium line-clamp-2 leading-tight drop-shadow">
+                <p className={`text-white font-medium line-clamp-2 leading-tight drop-shadow
+                  ${isCompact ? "text-[10px]" : "text-[11px]"}`}
+                >
                   {work.title}
                 </p>
               )}
               {isComicType
                 ? show("actress") && work.author && (
-                    <p className="text-sky-300/90 text-[9px] line-clamp-1 mt-0.5 drop-shadow">
+                    <p className={`text-sky-300/90 line-clamp-1 mt-0.5 drop-shadow
+                      ${isCompact ? "text-[9px]" : "text-[10px]"}`}
+                    >
                       {work.author}{work.circle ? ` / ${work.circle}` : ""}
                     </p>
                   )
                 : show("actress") && work.actress && (
-                    <p className="text-pink-300/90 text-[9px] line-clamp-1 mt-0.5 drop-shadow">
+                    <p className={`text-pink-300/90 line-clamp-1 mt-0.5 drop-shadow
+                      ${isCompact ? "text-[9px]" : "text-[10px]"}`}
+                    >
                       {work.actress}
                     </p>
                   )
@@ -161,8 +168,8 @@ export function WorkCard({ work, style }: Props) {
           </div>
         </div>
 
-        {/* ── Info strip (Normal / Rich only) ── */}
-        {!isCompact && (
+        {/* ── Info strip (Rich only) ── */}
+        {isRich && (
           <div className={`flex flex-col min-w-0 px-2.5 ${isRich ? "py-2.5 gap-1.5" : "py-2 gap-0.5"}`}>
 
             {/* Row 1: identifier + inline status dot + rating (normal) */}
