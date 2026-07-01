@@ -96,7 +96,7 @@ public class FetchMetadataJobUseCase
         work.UpdateStatus(ProcessingStatus.MetadataFetching);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        var context = new MetadataProviderContext(work.Id, work.PrimaryIdentifier ?? "", work.MetadataFields, "ja", cancellationToken);
+        var context = new MetadataProviderContext(work.Id, work.PrimaryIdentifier ?? "", work.MetadataFields, "ja", cancellationToken, work.MediaType);
 
         // 1. Fetch candidates from all providers
         var metadataResults = await _metadataService.CollectResultsAsync(context);

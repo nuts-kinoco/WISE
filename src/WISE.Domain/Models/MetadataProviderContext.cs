@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using WISE.Domain.Entities;
+using WISE.Domain.Enums;
 
 namespace WISE.Domain.Models;
 
@@ -10,5 +11,6 @@ public record MetadataProviderContext(
     string Identifier,
     IReadOnlyCollection<MetadataField> ExistingMetadata,
     string Language,
-    CancellationToken CancellationToken
+    CancellationToken CancellationToken,
+    MediaType MediaType = MediaType.Video
 );

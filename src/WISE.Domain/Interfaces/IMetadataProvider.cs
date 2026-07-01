@@ -1,4 +1,6 @@
+using System.Collections.Generic;
 using System.Threading.Tasks;
+using WISE.Domain.Enums;
 using WISE.Domain.Models;
 
 namespace WISE.Domain.Interfaces;
@@ -11,6 +13,12 @@ public interface IMetadataProvider
 {
     string ProviderId { get; }
     int Priority { get; }
+
+    /// <summary>
+    /// このプロバイダが対応する MediaType セット。
+    /// null を返す実装は「全 MediaType に対応」を意味する。
+    /// </summary>
+    IReadOnlySet<MediaType>? SupportedMediaTypes => null;
 
     /// <summary>
     /// Metadataを取得します。

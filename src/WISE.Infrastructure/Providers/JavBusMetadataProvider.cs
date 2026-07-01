@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Net.Http;
@@ -30,6 +30,7 @@ public class JavBusMetadataProvider : IMetadataProvider
 
     public string ProviderId => "JavBus";
     public int Priority => _options.Priority;
+    public IReadOnlySet<MediaType>? SupportedMediaTypes => new HashSet<MediaType> { MediaType.Video };
 
     public async Task<MetadataResult> FetchAsync(MetadataProviderContext context)
     {

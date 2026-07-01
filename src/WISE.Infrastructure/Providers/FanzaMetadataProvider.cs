@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -50,6 +50,7 @@ public class FanzaMetadataProvider : IMetadataProvider
 
     public string ProviderId => "Fanza";
     public int Priority => _options.Priority;
+    public IReadOnlySet<MediaType>? SupportedMediaTypes => new HashSet<MediaType> { MediaType.Video, MediaType.PhotoBook };
 
     public async Task<MetadataResult> FetchAsync(MetadataProviderContext context)
     {

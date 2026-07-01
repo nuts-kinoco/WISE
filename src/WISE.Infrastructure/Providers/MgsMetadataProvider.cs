@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Net.Http;
@@ -34,6 +34,7 @@ public class MgsMetadataProvider : IMetadataProvider
 
     public string ProviderId => "Mgs";
     public int Priority => _options.Priority;
+    public IReadOnlySet<MediaType>? SupportedMediaTypes => new HashSet<MediaType> { MediaType.Video };
 
     public async Task<MetadataResult> FetchAsync(MetadataProviderContext context)
     {

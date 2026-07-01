@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -34,6 +34,7 @@ public class AvWikiMetadataProvider : IMetadataProvider
 
     public string ProviderId => "AvWiki";
     public int Priority => 60; // Fanza=80, Mgs=70 より低いため補完用途
+    public IReadOnlySet<MediaType>? SupportedMediaTypes => new HashSet<MediaType> { MediaType.Video };
 
     public async Task<MetadataResult> FetchAsync(MetadataProviderContext context)
     {

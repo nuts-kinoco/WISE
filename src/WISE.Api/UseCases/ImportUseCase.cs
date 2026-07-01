@@ -52,27 +52,29 @@ public class ImportUseCase
         if (string.IsNullOrWhiteSpace(directoryPath) || !Directory.Exists(directoryPath))
             throw new ArgumentException("Invalid or inaccessible directory path.");
 
-        var extensions = new[] { ".mp4", ".mkv", ".avi", ".zip", ".jpg", ".png" };
-        var files = Directory.GetFiles(directoryPath, "*.*", SearchOption.AllDirectories)
-            .Where(f => extensions.Contains(Path.GetExtension(f).ToLower()))
-            .ToList();
+        var extensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            { ".mp4", ".mkv", ".avi", ".zip", ".cbz", ".rar", ".cbr", ".7z", ".epub", ".pdf", ".jpg", ".jpeg", ".png", ".webp" };
 
-        var candidates = new List<CandidateDto>();
         var existingIdentifiers = await _dbContext.Works
             .Select(w => w.PrimaryIdentifier)
             .ToListAsync();
         var existingSet = new HashSet<string>(
             existingIdentifiers.Where(i => i != null).Cast<string>());
 
-        foreach (var file in files)
-        {
-            var fileName = Path.GetFileName(file);
-            var fileInfo = new FileInfo(file);
+        var candidates = new List<CandidateDto>();
+        var totalFiles = 0;
 
-            // Import と同じ IdentifierResolver を使用
+        // アクセス拒否ディレクトリは警告を出してスキップ（例外で全件失敗しない）
+        foreach (var file in EnumerateSafe(directoryPath, extensions))
+        {
+            totalFiles++;
+            var fileName = Path.GetFileName(file);
+            FileInfo fileInfo;
+            try { fileInfo = new FileInfo(file); }
+            catch (UnauthorizedAccessException) { continue; }
+
             var tempAsset = new Asset(file, fileName, fileInfo.Length);
             var identifierResult = await _identifierResolver.ResolveAsync(tempAsset);
-
             var isUnknown = identifierResult.Decision == WISE.Domain.ValueObjects.Decision.Unknown;
 
             candidates.Add(new CandidateDto
@@ -96,8 +98,32 @@ public class ImportUseCase
         return new AnalyzeResultDto
         {
             ScannedDirectory = directoryPath,
-            TotalFiles = files.Count,
+            TotalFiles = totalFiles,
             Candidates = candidates
         };
+    }
+
+    // アクセス拒否・IO エラーのディレクトリをスキップしながら再帰列挙する。
+    // Directory.GetFiles と異なり全件を一度にメモリに展開しない。
+    private static IEnumerable<string> EnumerateSafe(string root, HashSet<string> extensions)
+    {
+        var queue = new Queue<string>();
+        queue.Enqueue(root);
+        while (queue.Count > 0)
+        {
+            var dir = queue.Dequeue();
+            IEnumerable<string> entries;
+            try { entries = Directory.EnumerateFileSystemEntries(dir); }
+            catch (UnauthorizedAccessException) { continue; }
+            catch (IOException) { continue; }
+
+            foreach (var entry in entries)
+            {
+                if (Directory.Exists(entry))
+                    queue.Enqueue(entry);
+                else if (extensions.Contains(Path.GetExtension(entry)))
+                    yield return entry;
+            }
+        }
     }
 }

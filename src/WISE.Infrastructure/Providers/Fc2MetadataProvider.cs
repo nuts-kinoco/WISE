@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -42,6 +42,7 @@ public class Fc2MetadataProvider : IMetadataProvider
 
     public string ProviderId => "Fc2";
     public int Priority => _options.Priority;
+    public IReadOnlySet<MediaType>? SupportedMediaTypes => new HashSet<MediaType> { MediaType.Video };
 
     private static readonly string[] NotFoundPhrases =
     {

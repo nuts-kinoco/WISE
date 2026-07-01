@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -30,6 +30,7 @@ public class DoujinishiFilenameMetadataProvider : IMetadataProvider
 
     public string ProviderId => "DoujinishiFilename";
     public int Priority => 50;
+    public IReadOnlySet<MediaType>? SupportedMediaTypes => new HashSet<MediaType> { MediaType.Comic, MediaType.Book };
 
     public DoujinishiFilenameMetadataProvider(WiseDbContext db, ILogger<DoujinishiFilenameMetadataProvider> logger)
     {

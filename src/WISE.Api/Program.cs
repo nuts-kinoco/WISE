@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Polly;
 using WISE.Domain.Interfaces;
 using WISE.Domain.Providers;
 using WISE.Domain.Services;
@@ -49,18 +50,34 @@ builder.Services.Configure<WISE.Domain.Models.MetadataProviderOptions>("LocalNfo
     builder.Configuration.GetSection("MetadataProviders:LocalNfo"));
 
 // Metadata providers — ConflictResolver が全Providerの結果をマージし、最高信頼度を primary とする
-// Tier0: ローカル（Priority=100, 即時・信頼性最高）
-builder.Services.AddScoped<IMetadataProvider, ComicInfoXmlMetadataProvider>(); // Priority=100（ComicInfo.xml内蔵）
-// Tier1: 公式・販売元（Priority≥70）
-builder.Services.AddScoped<IMetadataProvider, DLSiteMetadataProvider>();  // Priority=80（同人RJ/VJ/BJ）
-builder.Services.AddScoped<IMetadataProvider, FanzaMetadataProvider>();   // Priority=80
-builder.Services.AddScoped<IMetadataProvider, GetchuMetadataProvider>();  // Priority=70（同人/ゲーム）
-builder.Services.AddScoped<IMetadataProvider, MgsMetadataProvider>();     // Priority=70（Cookie要）
-builder.Services.AddScoped<IMetadataProvider, Fc2MetadataProvider>();     // Priority=60（FC2識別子専用）
-// Tier2: フォールバック補完（Priority<70）
-builder.Services.AddScoped<IMetadataProvider, Fc2AltMetadataProvider>(); // Priority=55（FC2削除済みコンテンツ）
-builder.Services.AddScoped<IMetadataProvider, AvWikiMetadataProvider>(); // Priority=60（日本語DB・補完用）
-builder.Services.AddScoped<IMetadataProvider, DoujinishiFilenameMetadataProvider>(); // Priority=50（ファイル名解析）
+// HTTP を使うプロバイダーは typed client として登録し Polly retry を適用する（3回、指数バックオフ）
+static IAsyncPolicy<System.Net.Http.HttpResponseMessage> MetadataRetryPolicy() =>
+    Policy<System.Net.Http.HttpResponseMessage>
+        .Handle<System.Net.Http.HttpRequestException>()
+        .OrResult(r => (int)r.StatusCode >= 500)
+        .WaitAndRetryAsync(3, i => TimeSpan.FromSeconds(Math.Pow(2, i)));
+
+// Tier0: ローカル（Priority=100, 即時・信頼性最高）—— HTTP なし、通常登録
+builder.Services.AddScoped<IMetadataProvider, ComicInfoXmlMetadataProvider>(); // Priority=100
+builder.Services.AddScoped<IMetadataProvider, DoujinishiFilenameMetadataProvider>(); // Priority=50
+// Tier1: 公式・販売元 — typed HTTP client + Polly retry
+builder.Services.AddHttpClient<DLSiteMetadataProvider>().AddPolicyHandler(MetadataRetryPolicy());
+builder.Services.AddScoped<IMetadataProvider>(sp => sp.GetRequiredService<DLSiteMetadataProvider>());
+builder.Services.AddHttpClient<FanzaMetadataProvider>().AddPolicyHandler(MetadataRetryPolicy());
+builder.Services.AddScoped<IMetadataProvider>(sp => sp.GetRequiredService<FanzaMetadataProvider>());
+builder.Services.AddHttpClient<GetchuMetadataProvider>().AddPolicyHandler(MetadataRetryPolicy());
+builder.Services.AddScoped<IMetadataProvider>(sp => sp.GetRequiredService<GetchuMetadataProvider>());
+builder.Services.AddHttpClient<MgsMetadataProvider>().AddPolicyHandler(MetadataRetryPolicy());
+builder.Services.AddScoped<IMetadataProvider>(sp => sp.GetRequiredService<MgsMetadataProvider>());
+builder.Services.AddHttpClient<Fc2MetadataProvider>().AddPolicyHandler(MetadataRetryPolicy());
+builder.Services.AddScoped<IMetadataProvider>(sp => sp.GetRequiredService<Fc2MetadataProvider>());
+// Tier2: フォールバック補完
+builder.Services.AddHttpClient<Fc2AltMetadataProvider>().AddPolicyHandler(MetadataRetryPolicy());
+builder.Services.AddScoped<IMetadataProvider>(sp => sp.GetRequiredService<Fc2AltMetadataProvider>());
+builder.Services.AddHttpClient<AvWikiMetadataProvider>().AddPolicyHandler(MetadataRetryPolicy());
+builder.Services.AddScoped<IMetadataProvider>(sp => sp.GetRequiredService<AvWikiMetadataProvider>());
+builder.Services.AddHttpClient<JavBusMetadataProvider>().AddPolicyHandler(MetadataRetryPolicy());
+builder.Services.AddScoped<IMetadataProvider>(sp => sp.GetRequiredService<JavBusMetadataProvider>());
 builder.Services.AddScoped<MetadataService>();
 builder.Services.AddScoped<IMetadataConflictResolver, MetadataConflictResolver>();
 builder.Services.AddSingleton<WISE.Application.Services.IJobCancellationService, WISE.Application.Services.JobCancellationService>();

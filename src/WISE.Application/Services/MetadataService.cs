@@ -11,11 +11,6 @@ namespace WISE.Application.Services;
 
 public class MetadataService
 {
-    // Tier1 (Priority≥80) がこれら全フィールドを揃えた場合、下位Providerをスキップする。
-    // PortraitCover は URL候補があっても実ダウンロードが失敗する場合があるため除外。
-    // カバーは Tier2 でも補完できる方が安全。
-    private static readonly string[] Tier1ExitFields = ["Title", "Actress", "Maker"];
-
     private readonly IEnumerable<IMetadataProvider> _providers;
     private readonly ILogger<MetadataService> _logger;
 
@@ -25,18 +20,33 @@ public class MetadataService
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
+    // Tier1 必須フィールドは MediaType ごとに異なる。
+    // Comic/Book は Actress/Maker ではなく Author/Circle が本質。
+    private static string[] GetTier1ExitFields(MediaType mediaType) => mediaType switch
+    {
+        MediaType.Comic    => ["Title", "Author", "Circle"],
+        MediaType.Book     => ["Title", "Author"],
+        _                  => ["Title", "Actress", "Maker"],  // Video / PhotoBook
+    };
+
     public async Task<IEnumerable<MetadataResult>> CollectResultsAsync(MetadataProviderContext context)
     {
-        _logger.LogInformation("[WISE.Metadata] Scan Started: {Identifier}", context.Identifier);
+        _logger.LogInformation("[WISE.Metadata] Scan Started: {Identifier} MediaType={MediaType}",
+            context.Identifier, context.MediaType);
 
-        var ordered = _providers.OrderByDescending(p => p.Priority).ToList();
+        // MediaType に対応しないプロバイダーを事前に除外
+        var eligible = _providers
+            .Where(p => p.SupportedMediaTypes == null || p.SupportedMediaTypes.Contains(context.MediaType))
+            .OrderByDescending(p => p.Priority)
+            .ToList();
 
-        // Tier1: 公式一次ソース (Priority≥80)。FANZAなど。
-        var tier1 = ordered.Where(p => p.Priority >= 80).ToList();
-        // Tier2+: 補完ソース (Priority<80)。MGS・Fc2・AvWikiなど。
-        var tier2 = ordered.Where(p => p.Priority < 80).ToList();
+        // Tier1: 公式一次ソース (Priority≥80)
+        var tier1 = eligible.Where(p => p.Priority >= 80).ToList();
+        // Tier2+: 補完ソース (Priority<80)
+        var tier2 = eligible.Where(p => p.Priority < 80).ToList();
 
         var allResults = new List<MetadataResult>();
+        var tier1ExitFields = GetTier1ExitFields(context.MediaType);
 
         // --- Step1: Tier1 を並列実行 ---
         if (tier1.Count > 0)
@@ -55,13 +65,13 @@ public class MetadataService
                 .Select(c => c.FieldName)
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-            var missing = Tier1ExitFields.Where(f => !coveredFields.Contains(f)).ToArray();
+            var missing = tier1ExitFields.Where(f => !coveredFields.Contains(f)).ToArray();
 
             if (missing.Length == 0)
             {
                 _logger.LogInformation(
                     "[WISE.Metadata] Tier1 satisfied all primary fields ({Fields}). Skipping {Count} lower-priority providers.",
-                    string.Join(", ", Tier1ExitFields), tier2.Count);
+                    string.Join(", ", tier1ExitFields), tier2.Count);
                 return allResults;
             }
 
