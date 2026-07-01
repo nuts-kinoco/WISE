@@ -144,7 +144,7 @@ public class AdultWikiMetadataProvider : IMetadataProvider
         // カバー画像: og:image → 記事内 img の順
         var ogImage = doc.DocumentNode
             .SelectSingleNode("//meta[@property='og:image']")
-            ?.GetAttributeValue("content", null);
+            ?.GetAttributeValue("content", "");
         if (!string.IsNullOrWhiteSpace(ogImage) && ogImage!.StartsWith("http"))
         {
             results.Add(new MetadataCandidate(ProviderId, "PortraitCover", ogImage, 60, Priority, SourceUrl: url));
@@ -155,7 +155,7 @@ public class AdultWikiMetadataProvider : IMetadataProvider
             var imgNode = doc.DocumentNode.SelectSingleNode("//article//img[@src]")
                        ?? doc.DocumentNode.SelectSingleNode("//div[contains(@class,'entry')]//img[@src]")
                        ?? doc.DocumentNode.SelectSingleNode("//main//img[@src]");
-            var src = imgNode?.GetAttributeValue("src", null) ?? imgNode?.GetAttributeValue("data-src", null);
+            var src = imgNode?.GetAttributeValue("src", "") ?? imgNode?.GetAttributeValue("data-src", "");
             if (!string.IsNullOrWhiteSpace(src) && src!.StartsWith("http"))
             {
                 results.Add(new MetadataCandidate(ProviderId, "PortraitCover", src, 55, Priority, SourceUrl: url));
