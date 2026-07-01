@@ -461,6 +461,17 @@ public class FetchMetadataJobUseCase
         await _workRepository.UpdateAsync(work, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
+        // FTS5 リビルドジョブをキュー（同一 JobType が既に Queued なら重複追加しない）
+        var ftsAlreadyQueued = await _dbContext.Jobs
+            .AnyAsync(j => j.JobType == "RebuildFts" && j.Status == JobStatus.Queued, cancellationToken);
+        if (!ftsAlreadyQueued)
+        {
+            var ftsJob = new Job("RebuildFts", "fts5-rebuild", "{}");
+            ftsJob.MarkAsQueued();
+            _dbContext.Jobs.Add(ftsJob);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+
         if (!isComplete)
         {
             throw new InvalidOperationException(

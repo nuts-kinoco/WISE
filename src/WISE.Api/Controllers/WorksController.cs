@@ -700,6 +700,16 @@ namespace WISE.Api.Controllers
             if (result == null || !System.IO.File.Exists(result.FilePath))
                 return NotFound();
 
+            // ETag = ファイルの最終更新時刻をハッシュとして使用
+            var fileInfo = new System.IO.FileInfo(result.FilePath);
+            var etag = $"\"{fileInfo.LastWriteTimeUtc.Ticks:x}\"";
+
+            if (Request.Headers.TryGetValue("If-None-Match", out var inm) && inm == etag)
+                return StatusCode(304);
+
+            Response.Headers["ETag"] = etag;
+            Response.Headers["Cache-Control"] = "public, max-age=86400";
+
             var stream = System.IO.File.OpenRead(result.FilePath);
             return File(stream, result.ContentType, enableRangeProcessing: false);
         }

@@ -147,6 +147,15 @@ public class BackgroundJobWorker : BackgroundService
                     job.MarkAsFailed("Payload does not contain valid WorkId");
                 }
             }
+            else if (job.JobType == "RebuildFts")
+            {
+                // METADATA_FIELD_FTS (FTS5 content table) をフルリビルドする。
+                // FetchMetadata 完了後に非同期で実行されるため、メタデータ取得をブロックしない。
+                await dbContext.Database.ExecuteSqlRawAsync(
+                    "INSERT INTO METADATA_FIELD_FTS(METADATA_FIELD_FTS) VALUES('rebuild')",
+                    stoppingToken);
+                job.MarkAsCompleted("FTS5 rebuild complete.");
+            }
             else
             {
                 job.MarkAsFailed($"Unknown job type: {job.JobType}");

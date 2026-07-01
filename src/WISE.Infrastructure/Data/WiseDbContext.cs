@@ -38,6 +38,9 @@ public class WiseDbContext : DbContext, IUnitOfWork
         {
             entity.HasKey(e => e.Id);
             entity.HasIndex(e => e.PrimaryIdentifier);
+            entity.HasIndex(e => e.Status);
+            entity.HasIndex(e => e.MediaType);
+            entity.HasIndex(e => e.Favorite);
 
             // Backing fields configuration for encapsulating collections
             entity.Metadata.FindNavigation(nameof(Work.Assets))
@@ -87,6 +90,7 @@ public class WiseDbContext : DbContext, IUnitOfWork
         modelBuilder.Entity<MetadataField>(entity =>
         {
             entity.HasKey(e => e.Id);
+            entity.HasIndex(e => new { e.FieldName, e.Value });
         });
 
         modelBuilder.Entity<EventLog>(entity =>
