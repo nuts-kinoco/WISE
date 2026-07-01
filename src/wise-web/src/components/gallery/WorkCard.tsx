@@ -225,7 +225,7 @@ export function WorkCard({ work, style }: Props) {
                   ? (
                     <>
                       {show("maker") && work.circle && (
-                        <p className="text-[11px] text-muted-foreground truncate">{work.circle}</p>
+                        <p className="text-[11px] text-muted-foreground truncate">サークル: {work.circle}</p>
                       )}
                       {work.pageCount && (
                         <p className="text-[10px] text-muted-foreground/60 truncate">{work.pageCount}ページ</p>
@@ -234,10 +234,10 @@ export function WorkCard({ work, style }: Props) {
                   ) : (
                     <>
                       {show("maker") && work.maker && (
-                        <p className="text-[11px] text-muted-foreground truncate">{work.maker}</p>
+                        <p className="text-[11px] text-muted-foreground truncate">メーカー: {work.maker}</p>
                       )}
                       {show("label") && work.label && (
-                        <p className="text-[10px] text-muted-foreground/60 truncate">{work.label}</p>
+                        <p className="text-[10px] text-muted-foreground/60 truncate">レーベル: {work.label}</p>
                       )}
                     </>
                   )
