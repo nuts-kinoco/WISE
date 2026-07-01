@@ -95,11 +95,11 @@ public class ExecuteImportJobUseCase
             var identifierResult = await _identifierResolver.ResolveAsync(tempAsset, cancellationToken);
             var identifier = identifierResult.ExtractedIdentifier;
 
-            // Book フォールバック: epub/pdf でパターン未マッチ → ファイル名 stem を識別子として使用
+            // Book/Archive フォールバック: パターン未マッチ → ファイル名 stem を識別子として使用
             if (identifier.StartsWith("UNKNOWN-", StringComparison.OrdinalIgnoreCase))
             {
                 var ext = Path.GetExtension(file).ToLowerInvariant();
-                if (ext is ".epub" or ".pdf")
+                if (ext is ".epub" or ".pdf" or ".zip" or ".cbz" or ".rar" or ".cbr" or ".7z")
                 {
                     var stem = Path.GetFileNameWithoutExtension(file);
                     stem = Regex.Replace(stem, @"[\\/:*?""<>|]", "-").Trim('-', ' ', '_');
@@ -166,20 +166,22 @@ public class ExecuteImportJobUseCase
             }
 
             // --- 5. Work の検索または作成 ---
+            var mediaType = InferMediaType(finalFilePath);
+            var workCacheKey = $"{identifier}:{(int)mediaType}";
             var work = await _dbContext.Works
                 .Include(w => w.Assets)
-                .FirstOrDefaultAsync(w => w.PrimaryIdentifier == identifier, cancellationToken);
+                .FirstOrDefaultAsync(w => w.PrimaryIdentifier == identifier && w.MediaType == mediaType, cancellationToken);
 
             bool isNewWork = false;
 
-            if (work == null && newWorksCache.TryGetValue(identifier, out var cachedWork))
+            if (work == null && newWorksCache.TryGetValue(workCacheKey, out var cachedWork))
                 work = cachedWork;
 
             if (work == null)
             {
-                work = new Work(identifier, InferMediaType(finalFilePath));
+                work = new Work(identifier, mediaType);
                 _dbContext.Works.Add(work);
-                newWorksCache[identifier] = work;
+                newWorksCache[workCacheKey] = work;
                 addedWorksCount++;
                 isNewWork = true;
 

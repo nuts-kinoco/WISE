@@ -93,7 +93,11 @@ namespace WISE.Api.Controllers
                     using var ms = new MemoryStream();
                     await stream.CopyToAsync(ms, HttpContext.RequestAborted);
                     cachedBytes = ms.ToArray();
-                    _cache.Set(cacheKey, cachedBytes, TimeSpan.FromMinutes(30));
+                    _cache.Set(cacheKey, cachedBytes, new MemoryCacheEntryOptions
+                    {
+                        SlidingExpiration = TimeSpan.FromMinutes(30),
+                        Size = cachedBytes.Length,  // SizeLimit 集計に使用
+                    });
                 }
 
                 return File(cachedBytes, contentType);
@@ -101,6 +105,11 @@ namespace WISE.Api.Controllers
             catch (ArgumentOutOfRangeException)
             {
                 return NotFound();
+            }
+            catch (System.IO.InvalidDataException ex)
+            {
+                _logger.LogWarning(ex, "[Reader] Corrupt archive for work {WorkId}", workId);
+                return UnprocessableEntity(new { error = "Archive is corrupt or unreadable." });
             }
             catch (Exception ex)
             {
