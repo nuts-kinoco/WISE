@@ -149,12 +149,23 @@ public class BackgroundJobWorker : BackgroundService
             }
             else if (job.JobType == "RebuildFts")
             {
-                // METADATA_FIELD_FTS (FTS5 content table) をフルリビルドする。
-                // FetchMetadata 完了後に非同期で実行されるため、メタデータ取得をブロックしない。
-                await dbContext.Database.ExecuteSqlRawAsync(
-                    "INSERT INTO METADATA_FIELD_FTS(METADATA_FIELD_FTS) VALUES('rebuild')",
-                    stoppingToken);
-                job.MarkAsCompleted("FTS5 rebuild complete.");
+                // 同一 JobType が後続にキューされている場合、このジョブは重複とみなしてスキップ。
+                // 並行 FetchMetadata 完了で複数 RebuildFts がキューされる Race Condition への対処。
+                // RebuildFts 自体は冪等なので、最後の 1 件だけ実行すれば十分。
+                var hasDuplicate = await dbContext.Jobs
+                    .AnyAsync(j => j.JobType == "RebuildFts" && j.Status == JobStatus.Queued && j.Id != job.Id,
+                              stoppingToken);
+                if (hasDuplicate)
+                {
+                    job.MarkAsCompleted("Deduplicated: a later RebuildFts job will run.");
+                }
+                else
+                {
+                    await dbContext.Database.ExecuteSqlRawAsync(
+                        "INSERT INTO METADATA_FIELD_FTS(METADATA_FIELD_FTS) VALUES('rebuild')",
+                        stoppingToken);
+                    job.MarkAsCompleted("FTS5 rebuild complete.");
+                }
             }
             else
             {

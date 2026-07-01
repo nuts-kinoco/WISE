@@ -701,14 +701,15 @@ namespace WISE.Api.Controllers
                 return NotFound();
 
             // ETag = ファイルの最終更新時刻をハッシュとして使用
+            // RFC 7232: ETag / Cache-Control は 304 応答にも含める必要があるため、
+            // ヘッダーを先にセットしてから If-None-Match チェックを行う。
             var fileInfo = new System.IO.FileInfo(result.FilePath);
             var etag = $"\"{fileInfo.LastWriteTimeUtc.Ticks:x}\"";
+            Response.Headers["ETag"] = etag;
+            Response.Headers["Cache-Control"] = "public, max-age=86400";
 
             if (Request.Headers.TryGetValue("If-None-Match", out var inm) && inm == etag)
                 return StatusCode(304);
-
-            Response.Headers["ETag"] = etag;
-            Response.Headers["Cache-Control"] = "public, max-age=86400";
 
             var stream = System.IO.File.OpenRead(result.FilePath);
             return File(stream, result.ContentType, enableRangeProcessing: false);

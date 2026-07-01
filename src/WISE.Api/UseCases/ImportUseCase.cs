@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using WISE.Domain.Entities;
 using WISE.Domain.Interfaces;
 using WISE.Infrastructure.Data;
@@ -14,11 +15,16 @@ public class ImportUseCase
 {
     private readonly WiseDbContext _dbContext;
     private readonly IIdentifierResolver _identifierResolver;
+    private readonly ILogger<ImportUseCase> _logger;
 
-    public ImportUseCase(WiseDbContext dbContext, IIdentifierResolver identifierResolver)
+    public ImportUseCase(
+        WiseDbContext dbContext,
+        IIdentifierResolver identifierResolver,
+        ILogger<ImportUseCase> logger)
     {
         _dbContext = dbContext;
         _identifierResolver = identifierResolver;
+        _logger = logger;
     }
 
     public class AnalyzeResultDto
@@ -65,7 +71,7 @@ public class ImportUseCase
         var totalFiles = 0;
 
         // アクセス拒否ディレクトリは警告を出してスキップ（例外で全件失敗しない）
-        foreach (var file in EnumerateSafe(directoryPath, extensions))
+        foreach (var file in EnumerateSafe(directoryPath, extensions, _logger))
         {
             totalFiles++;
             var fileName = Path.GetFileName(file);
@@ -105,7 +111,8 @@ public class ImportUseCase
 
     // アクセス拒否・IO エラーのディレクトリをスキップしながら再帰列挙する。
     // Directory.GetFiles と異なり全件を一度にメモリに展開しない。
-    private static IEnumerable<string> EnumerateSafe(string root, HashSet<string> extensions)
+    private static IEnumerable<string> EnumerateSafe(
+        string root, HashSet<string> extensions, ILogger logger)
     {
         var queue = new Queue<string>();
         queue.Enqueue(root);
@@ -114,8 +121,16 @@ public class ImportUseCase
             var dir = queue.Dequeue();
             IEnumerable<string> entries;
             try { entries = Directory.EnumerateFileSystemEntries(dir); }
-            catch (UnauthorizedAccessException) { continue; }
-            catch (IOException) { continue; }
+            catch (UnauthorizedAccessException ex)
+            {
+                logger.LogWarning("[Import] スキップ（アクセス拒否）: {Dir} — {Msg}", dir, ex.Message);
+                continue;
+            }
+            catch (IOException ex)
+            {
+                logger.LogWarning("[Import] スキップ（IO エラー）: {Dir} — {Msg}", dir, ex.Message);
+                continue;
+            }
 
             foreach (var entry in entries)
             {

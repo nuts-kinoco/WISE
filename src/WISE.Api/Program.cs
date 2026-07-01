@@ -151,7 +151,9 @@ var dbPath = Path.Combine(appDataPath, "wise.db");
 
 builder.Services.AddDbContext<WiseDbContext>(options =>
 {
-    options.UseSqlite($"Data Source={dbPath}");
+    // Foreign Keys=True: 接続文字列で FK を有効化（接続プール再利用時も確実に有効）
+    // SqlitePragmaInterceptor も併用し、両方で担保する。
+    options.UseSqlite($"Data Source={dbPath};Foreign Keys=True");
     options.AddInterceptors(new WISE.Infrastructure.Data.SqlitePragmaInterceptor());
 });
 builder.Services.AddScoped<IWorkRepository, WISE.Infrastructure.Data.Repositories.WorkRepository>();

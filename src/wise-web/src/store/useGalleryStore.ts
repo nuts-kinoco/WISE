@@ -85,7 +85,22 @@ export const useGalleryStore = create<GalleryState>()(
       mediaTypeFilter: null,
       setMediaTypeFilter: (mediaTypeFilter) => set({ mediaTypeFilter }),
     }),
-    // New storage key — avoids conflicts with v1 persisted state
-    { name: 'wise-gallery-v2' }
+    {
+      name: 'wise-gallery-v2',
+      // version を上げると migrate が呼ばれ、古い persist state に新フィールドのデフォルトをマージできる。
+      // Sprint 27: identifier デフォルト false 化に対応。ユーザーの明示設定は保持しつつ、
+      //            存在しない新フィールドには DEFAULT_DISPLAY の値を補完する。
+      version: 1,
+      migrate: (persistedState: unknown, _version: number) => {
+        const old = (persistedState ?? {}) as Record<string, unknown>;
+        return {
+          ...old,
+          displayFields: {
+            ...DEFAULT_DISPLAY,
+            ...((old.displayFields ?? {}) as Partial<Record<string, boolean>>),
+          },
+        };
+      },
+    }
   )
 );
