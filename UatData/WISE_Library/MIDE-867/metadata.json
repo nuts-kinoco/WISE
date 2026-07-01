@@ -1,0 +1,25 @@
+﻿{
+  "identifier": "MIDE-867",
+  "provider": null,
+  "providers": [
+    "Fanza"
+  ],
+  "url": "https://www.dmm.co.jp/digital/videoa/-/detail/=/cid=mide00867/",
+  "scrapedAt": "2026-06-29T15:27:17.2134473Z",
+  "title": "",
+  "maker": "",
+  "label": "",
+  "series": "",
+  "releaseDate": "",
+  "runtime": null,
+  "actresses": [],
+  "genres": [],
+  "covers": {
+    "portrait": null,
+    "landscape": "mide-867_pl.jpg"
+  },
+  "sampleImages": [],
+  "userFavorite": false,
+  "userRating": null,
+  "userMemo": ""
+}

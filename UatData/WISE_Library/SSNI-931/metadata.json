@@ -1,0 +1,25 @@
+﻿{
+  "identifier": "SSNI-931",
+  "provider": null,
+  "providers": [
+    "Fanza"
+  ],
+  "url": "https://www.dmm.co.jp/digital/videoa/-/detail/=/cid=ssni00931/",
+  "scrapedAt": "2026-06-29T15:32:43.3631842Z",
+  "title": "",
+  "maker": "",
+  "label": "",
+  "series": "",
+  "releaseDate": "",
+  "runtime": null,
+  "actresses": [],
+  "genres": [],
+  "covers": {
+    "portrait": "ssni-931_ps.jpg",
+    "landscape": "ssni-931_pl.jpg"
+  },
+  "sampleImages": [],
+  "userFavorite": false,
+  "userRating": null,
+  "userMemo": ""
+}

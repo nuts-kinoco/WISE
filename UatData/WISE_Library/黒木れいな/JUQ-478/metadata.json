@@ -1,0 +1,30 @@
+﻿{
+  "identifier": "JUQ-478",
+  "provider": "AvWiki",
+  "providers": [
+    "Fanza",
+    "AvWiki"
+  ],
+  "url": "https://av-wiki.net/juq-478/",
+  "scrapedAt": "2026-06-29T15:30:23.4230799Z",
+  "title": "\u96FB\u6483\u79FB\u7C4D Madonna\u5C02\u5C5E \u5143Hcup\u30B0\u30E9\u30D3\u30A2\u30A2\u30A4\u30C9\u30EB \u9ED2\u6728\u308C\u3044\u306A \u5927\u4EBA\u306E\u30D5\u30A7\u30ED\u30E2\u30F3\u3092\u6492\u304D\u6563\u3089\u3059\u6C57\u3060\u304F\u4E2D\u51FA\u30573\u672C\u756A",
+  "maker": "\u30DE\u30C9\u30F3\u30CA",
+  "label": "Madonna",
+  "series": "",
+  "releaseDate": "2023-11-10",
+  "runtime": null,
+  "actresses": [
+    {
+      "name": "\u9ED2\u6728\u308C\u3044\u306A"
+    }
+  ],
+  "genres": [],
+  "covers": {
+    "portrait": "juq-478_ps.jpg",
+    "landscape": "juq-478_pl.jpg"
+  },
+  "sampleImages": [],
+  "userFavorite": false,
+  "userRating": null,
+  "userMemo": ""
+}

@@ -1,0 +1,25 @@
+﻿{
+  "identifier": "KTRA-350",
+  "provider": null,
+  "providers": [
+    "Fanza"
+  ],
+  "url": "https://www.dmm.co.jp/digital/videoa/-/detail/=/cid=ktra00350/",
+  "scrapedAt": "2026-06-29T14:53:20.4204865Z",
+  "title": "",
+  "maker": "",
+  "label": "",
+  "series": "",
+  "releaseDate": "",
+  "runtime": null,
+  "actresses": [],
+  "genres": [],
+  "covers": {
+    "portrait": null,
+    "landscape": "ktra-350_pl.jpg"
+  },
+  "sampleImages": [],
+  "userFavorite": false,
+  "userRating": null,
+  "userMemo": ""
+}

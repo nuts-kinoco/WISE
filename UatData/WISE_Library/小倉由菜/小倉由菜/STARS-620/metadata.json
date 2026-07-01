@@ -1,0 +1,30 @@
+﻿{
+  "identifier": "STARS-620",
+  "provider": "AvWiki",
+  "providers": [
+    "Fanza",
+    "AvWiki"
+  ],
+  "url": "https://av-wiki.net/stars-620/",
+  "scrapedAt": "2026-06-29T15:28:33.5657914Z",
+  "title": "\u59BB\u5B50\u304C\u3044\u308B\u306E\u306B\u7406\u6027\u304C\u52B9\u304B\u306A\u304B\u3063\u305F\uFF65\uFF65\uFF65\u307E\u3055\u304B\u90E8\u4E0B\u306E\u5C0F\u5009\u304C\uFF65\uFF65\uFF65 \u3059\u3079\u3066\u306F\u4ED5\u7D44\u307E\u308C\u305F\u7F60\u3060\u3063\u305F \u8AB0\u306B\u3082\u8A00\u3048\u306A\u3044\u76F8\u90E8\u5C4B\u9006NTR\u51FA\u5F35 \u5C0F\u5009\u7531\u83DC",
+  "maker": "SOD\u30AF\u30EA\u30A8\u30A4\u30C8",
+  "label": "SOD star",
+  "series": "",
+  "releaseDate": "2022-07-07",
+  "runtime": null,
+  "actresses": [
+    {
+      "name": "\u5C0F\u5009\u7531\u83DC"
+    }
+  ],
+  "genres": [],
+  "covers": {
+    "portrait": "stars-620_ps.jpg",
+    "landscape": null
+  },
+  "sampleImages": [],
+  "userFavorite": false,
+  "userRating": null,
+  "userMemo": ""
+}

@@ -1,0 +1,48 @@
+﻿{
+  "identifier": "MKCK-252",
+  "provider": "Fanza",
+  "providers": [
+    "Fanza"
+  ],
+  "url": "https://video.dmm.co.jp/av/content/?id=mkck00252",
+  "scrapedAt": "2026-06-29T14:50:22.2258796Z",
+  "title": "\u3010\u72EC\u5360\u3011\u9577\u8EAB\u5DE8\u4E73\u30DC\u30C7\u30A325\u4F538\u6642\u9593 \u9AD8\u8EAB\u9577\u00D7\u5C0F\u9854\u00D7\u305F\u308F\u308F\u4E73\u623F 3\u3064\u306E\u7F8E\u304C\u63C3\u3063\u305F\u5947\u8DE1\u306E\u30AA\u30F3\u30CA\u9054",
+  "maker": "E-BODY",
+  "label": "E-BODY",
+  "series": "",
+  "releaseDate": "2020/02/08",
+  "runtime": 477,
+  "actresses": [
+    {
+      "name": "\u3059\u3079\u3066\u8868\u793A\u3059\u308B"
+    }
+  ],
+  "genres": [
+    "\u7F8E\u4E73",
+    "\u5DE8\u4E73",
+    "\u30B9\u30EC\u30F3\u30C0\u30FC",
+    "\u9A0E\u4E57\u4F4D",
+    "4\u6642\u9593\u4EE5\u4E0A\u4F5C\u54C1",
+    "\u9577\u8EAB",
+    "\u72EC\u5360\u914D\u4FE1"
+  ],
+  "covers": {
+    "portrait": null,
+    "landscape": "mkck-252_pl.jpg"
+  },
+  "sampleImages": [
+    "/api/assets/44f18bf7-8ee7-4a2a-b6bd-fbee45285704/content",
+    "/api/assets/8d147f66-165c-4b5a-9453-0f47a4a72481/content",
+    "/api/assets/dd4dcf96-1955-4f1a-bb84-1b713b71f848/content",
+    "/api/assets/5925de29-de1d-4592-a4fd-89e6d6a1b192/content",
+    "/api/assets/6da37dd9-6e4d-467b-a158-0b7d73ecc7ec/content",
+    "/api/assets/dd30eb82-97f6-42c4-9260-13d4dcd01ec9/content",
+    "/api/assets/1cff14a6-db9f-46ce-a0f8-1b0a8f8b6d85/content",
+    "/api/assets/91faded7-08bf-4f95-99f1-58bab48f1f32/content",
+    "/api/assets/f44053d0-1630-4a63-b93b-6841568cb19d/content",
+    "/api/assets/911f3f06-da70-4957-9588-33f84794f5e4/content"
+  ],
+  "userFavorite": false,
+  "userRating": null,
+  "userMemo": ""
+}

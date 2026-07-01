@@ -1,0 +1,30 @@
+﻿{
+  "identifier": "MIDV-201",
+  "provider": "AvWiki",
+  "providers": [
+    "Fanza",
+    "AvWiki"
+  ],
+  "url": "https://av-wiki.net/midv-201/",
+  "scrapedAt": "2026-06-29T15:30:59.5754213Z",
+  "title": "AV\u5F15\u9000 \u3064\u307C\u307F\u306F\u3064\u307C\u307F\u306E\u307E\u307E\u3067\u2026\u6700\u5F8C\u306E\u30BB\u30C3\u30AF\u30B9",
+  "maker": "\u30E0\u30FC\u30C7\u30A3\u30FC\u30BA",
+  "label": "MOODYZ DIVA",
+  "series": "",
+  "releaseDate": "2022-09-16",
+  "runtime": null,
+  "actresses": [
+    {
+      "name": "\u3064\u307C\u307F"
+    }
+  ],
+  "genres": [],
+  "covers": {
+    "portrait": "midv-201_ps.jpg",
+    "landscape": "midv-201_pl.jpg"
+  },
+  "sampleImages": [],
+  "userFavorite": false,
+  "userRating": null,
+  "userMemo": ""
+}

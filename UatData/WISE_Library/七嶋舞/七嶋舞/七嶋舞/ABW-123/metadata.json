@@ -1,0 +1,31 @@
+﻿{
+  "identifier": "ABW-123",
+  "provider": "Mgs",
+  "providers": [
+    "AvWiki",
+    "Mgs",
+    "Fanza"
+  ],
+  "url": "https://www.mgstage.com/product/product_detail/ABW-123/",
+  "scrapedAt": "2026-06-29T14:40:31.0554194Z",
+  "title": "\u9854\u5C04\u306E\u7F8E\u5B66 15 \u7F8E\u5973\u306E\u9854\u9762\u306B\u6E9C\u307E\u308A\u306B\u6E9C\u307E\u3063\u305F\u767D\u6FC1\u7537\u6C41\u3092\u3076\u3061\u307E\u3051\u308D\uFF01\uFF01 \u4E03\u5D8B\u821E \u3010MGS\u3060\u3051\u306E\u304A\u307E\u3051\u6620\u50CF\u4ED8\u304D\u002B10\u5206\u3011",
+  "maker": "\u30D7\u30EC\u30B9\u30C6\u30FC\u30B8",
+  "label": "ABSOLUTELY WONDERFUL",
+  "series": "\u9854\u5C04\u306E\u7F8E\u5B66",
+  "releaseDate": "2021-07-29",
+  "runtime": null,
+  "actresses": [
+    {
+      "name": "\u4E03\u5D8B\u821E"
+    }
+  ],
+  "genres": [],
+  "covers": {
+    "portrait": "abw-123_ps.jpg",
+    "landscape": null
+  },
+  "sampleImages": [],
+  "userFavorite": false,
+  "userRating": null,
+  "userMemo": ""
+}

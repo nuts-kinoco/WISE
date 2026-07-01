@@ -1,0 +1,30 @@
+﻿{
+  "identifier": "IPX-634",
+  "provider": "AvWiki",
+  "providers": [
+    "Fanza",
+    "AvWiki"
+  ],
+  "url": "https://av-wiki.net/ipx-634/",
+  "scrapedAt": "2026-06-29T15:29:29.9890262Z",
+  "title": "FIRST IMPRESSION 148 \u4EE4\u548C\u30A4\u30C1\u3001AV\u5973\u512A\u3089\u3057\u304B\u3089\u306C\u30B7\u30E7\u30FC\u30C8\u30AB\u30C3\u30C8\u7F8E\u5C11\u5973 \u5C0F\u91CE\u7434\u5F13",
+  "maker": "\u30A2\u30A4\u30C7\u30A2\u30DD\u30B1\u30C3\u30C8",
+  "label": "\u30C6\u30A3\u30C3\u30B7\u30E5",
+  "series": "First Impression",
+  "releaseDate": "2021-04-09",
+  "runtime": null,
+  "actresses": [
+    {
+      "name": "\u5C0F\u91CE\u7434\u5F13"
+    }
+  ],
+  "genres": [],
+  "covers": {
+    "portrait": "ipx-634_ps.jpg",
+    "landscape": "ipx-634_pl.jpg"
+  },
+  "sampleImages": [],
+  "userFavorite": false,
+  "userRating": null,
+  "userMemo": ""
+}

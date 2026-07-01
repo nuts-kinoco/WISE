@@ -1,0 +1,30 @@
+﻿{
+  "identifier": "MIDE-921",
+  "provider": "AvWiki",
+  "providers": [
+    "Fanza",
+    "AvWiki"
+  ],
+  "url": "https://av-wiki.net/mide-921/",
+  "scrapedAt": "2026-06-29T15:32:46.5637496Z",
+  "title": "\u3082\u3057\u304B\u3057\u305F\u3089\u2026\uFF08\u8033\u5143\u3067\uFF09\u4ECA\u591C\u3001\u7AE5\u8C9E\u5352\u696D\u3067\u304D\u308B\u304B\u3082\u306D \u7D42\u96FB\u9003\u3057\u305F\u5973\u4E0A\u53F8\u3068\u30D3\u30B8\u30CD\u30B9\u30DB\u30C6\u30EB\u306B\u304A\u6CCA\u307E\u308A\u3057\u305F\u3089\u7AE5\u8C9E\u304C\u30D0\u30EC\u3066\uFF08\u91D1\uFF09\uFF5E\uFF08\u6708\uFF09\u307E\u3067\u4F55\u5EA6\u3082\u5C04\u7CBE\u3068\u4E2D\u51FA\u3057\u3092\u5F37\u8981\u3055\u308C\u305F\u50D5 \u85CD\u82BD\u307F\u305A\u304D",
+  "maker": "\u30E0\u30FC\u30C7\u30A3\u30FC\u30BA",
+  "label": "MOODYZ DIVA",
+  "series": "",
+  "releaseDate": "2021-04-23",
+  "runtime": null,
+  "actresses": [
+    {
+      "name": "\u85CD\u82BD\u307F\u305A\u304D"
+    }
+  ],
+  "genres": [],
+  "covers": {
+    "portrait": "mide-921_ps.jpg",
+    "landscape": "mide-921_pl.jpg"
+  },
+  "sampleImages": [],
+  "userFavorite": false,
+  "userRating": null,
+  "userMemo": ""
+}

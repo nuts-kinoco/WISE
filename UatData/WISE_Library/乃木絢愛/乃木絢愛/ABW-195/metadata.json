@@ -1,0 +1,31 @@
+﻿{
+  "identifier": "ABW-195",
+  "provider": "Mgs",
+  "providers": [
+    "Fanza",
+    "Mgs",
+    "AvWiki"
+  ],
+  "url": "https://www.mgstage.com/product/product_detail/ABW-195/",
+  "scrapedAt": "2026-06-29T15:29:59.6180102Z",
+  "title": "\u4E43\u6728\u7D62\u611B\u306E\u6975\u4E0A\u7B46\u304A\u308D\u3057 45 \u7AE5\u8C9E\u30AC\u30C1\u7D20\u4EBA3\u540D\uFF01\uFF01\u6FC3\u539A\u30B5\u30DD\u30FC\u30C8\u3067\u7AE5\u8C9E\u611F\u6D99\uFF01\uFF01\u3010MGS\u3060\u3051\u306E\u304A\u307E\u3051\u6620\u50CF\u4ED8\u304D\u002B10\u5206\u3011",
+  "maker": "\u30D7\u30EC\u30B9\u30C6\u30FC\u30B8",
+  "label": "ABSOLUTELY WONDERFUL",
+  "series": "\u6975\u4E0A\u7B46\u304A\u308D\u3057",
+  "releaseDate": "2022-01-27",
+  "runtime": null,
+  "actresses": [
+    {
+      "name": "\u4E43\u6728\u7D62\u611B"
+    }
+  ],
+  "genres": [],
+  "covers": {
+    "portrait": "abw-195_ps.jpg",
+    "landscape": null
+  },
+  "sampleImages": [],
+  "userFavorite": false,
+  "userRating": null,
+  "userMemo": ""
+}

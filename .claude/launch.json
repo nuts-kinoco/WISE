@@ -1,0 +1,18 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "WISE API (ASP.NET Core)",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": ["run", "--project", "src/WISE.Api/WISE.Api.csproj"],
+      "port": 5162,
+      "autoPort": false
+    },
+    {
+      "name": "WISE Web (Next.js)",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--prefix", "src/wise-web"],
+      "port": 3000
+    }
+  ]
+}

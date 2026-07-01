@@ -1,0 +1,30 @@
+﻿{
+  "identifier": "IPX-825",
+  "provider": "AvWiki",
+  "providers": [
+    "Fanza",
+    "AvWiki"
+  ],
+  "url": "https://av-wiki.net/ipx-825/",
+  "scrapedAt": "2026-06-29T15:35:40.470098Z",
+  "title": "\u6C17\u7D76\u3059\u308B\u7A0B\u6C17\u6301\u3061\u30A4\u30A4\u7F8E\u811A\u7F8E\u30DE\u30F3\u307E\u3044\u306E\u5C04\u7CBE\u3057\u653E\u984C\u3054\u5949\u4ED5\u30BD\u30FC\u30D7 \u79C1\u3001\u65E5\u672C\u3067\u4E00\u756A\u30BD\u30FC\u30D7\u30D7\u30EC\u30A4\u4E0A\u624B\u3044\u81EA\u4FE1\u3042\u308A\u307E\u3059\uFF01\uFF01 \u795E\u83DC\u7F8E\u307E\u3044",
+  "maker": "\u30A2\u30A4\u30C7\u30A2\u30DD\u30B1\u30C3\u30C8",
+  "label": "\u30C6\u30A3\u30C3\u30B7\u30E5",
+  "series": "",
+  "releaseDate": "2022-03-04",
+  "runtime": null,
+  "actresses": [
+    {
+      "name": "\u795E\u83DC\u7F8E\u307E\u3044"
+    }
+  ],
+  "genres": [],
+  "covers": {
+    "portrait": "ipx-825_ps.jpg",
+    "landscape": "ipx-825_pl.jpg"
+  },
+  "sampleImages": [],
+  "userFavorite": false,
+  "userRating": null,
+  "userMemo": ""
+}

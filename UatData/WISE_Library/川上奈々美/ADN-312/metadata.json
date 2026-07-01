@@ -1,0 +1,30 @@
+﻿{
+  "identifier": "ADN-312",
+  "provider": "AvWiki",
+  "providers": [
+    "Fanza",
+    "AvWiki"
+  ],
+  "url": "https://av-wiki.net/adn-312/",
+  "scrapedAt": "2026-06-29T15:29:40.8560512Z",
+  "title": "\u7981\u3058\u3089\u308C\u305F\u80CC\u5FB3\u59E66 \u82E5\u904E\u304E\u305F\u7FA9\u7406\u306E\u6BCD \u5DDD\u4E0A\u5948\u3005\u7F8E",
+  "maker": "\u30A2\u30BF\u30C3\u30AB\u30FC\u30BA",
+  "label": "\u5927\u4EBA\u306E\u30C9\u30E9\u30DE",
+  "series": "\u7981\u3058\u3089\u308C\u305F\u80CC\u5FB3\u59E6",
+  "releaseDate": "2021-05-01",
+  "runtime": null,
+  "actresses": [
+    {
+      "name": "\u5DDD\u4E0A\u5948\u3005\u7F8E"
+    }
+  ],
+  "genres": [],
+  "covers": {
+    "portrait": "adn-312_ps.jpg",
+    "landscape": "adn-312_pl.jpg"
+  },
+  "sampleImages": [],
+  "userFavorite": false,
+  "userRating": null,
+  "userMemo": ""
+}

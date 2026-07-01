@@ -1,0 +1,25 @@
+﻿{
+  "identifier": "FC2-PPV-3890123",
+  "provider": null,
+  "providers": [
+    "Fanza"
+  ],
+  "url": null,
+  "scrapedAt": "2026-06-29T15:30:55.8458618Z",
+  "title": "",
+  "maker": "",
+  "label": "",
+  "series": "",
+  "releaseDate": "",
+  "runtime": null,
+  "actresses": [],
+  "genres": [],
+  "covers": {
+    "portrait": null,
+    "landscape": null
+  },
+  "sampleImages": [],
+  "userFavorite": false,
+  "userRating": null,
+  "userMemo": ""
+}

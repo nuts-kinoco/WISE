@@ -1,0 +1,30 @@
+﻿{
+  "identifier": "SONE-150",
+  "provider": "AvWiki",
+  "providers": [
+    "Fanza",
+    "AvWiki"
+  ],
+  "url": "https://av-wiki.net/sone-150/",
+  "scrapedAt": "2026-06-29T15:34:57.1328497Z",
+  "title": "\u7167\u308C\u3066\u3001\u60DA\u308C\u3066\u3001\u30A4\u30AD\u6B62\u307E\u306A\u3044\u3002\u30DB\u30C6\u30EB\u3067\u3058\u3063\u304F\u308A\u306D\u3063\u3068\u308A\u4F55\u5EA6\u3082\u4F55\u5EA6\u3082\u6C42\u3081\u5408\u3046\u4E38\u4E00\u65E5\u4E2D\u30E4\u30EA\u307E\u304F\u308A\u6FC3\u5BC6\u30C7\u30FC\u30C8 \u5DDD\u8D8A\u306B\u3053",
+  "maker": "\u30A8\u30B9\u30EF\u30F3 \u30CA\u30F3\u30D0\u30FC\u30EF\u30F3\u30B9\u30BF\u30A4\u30EB",
+  "label": "S1 NO.1 STYLE",
+  "series": "",
+  "releaseDate": "2024-04-05",
+  "runtime": null,
+  "actresses": [
+    {
+      "name": "\u5DDD\u8D8A\u306B\u3053"
+    }
+  ],
+  "genres": [],
+  "covers": {
+    "portrait": "sone-150_ps.jpg",
+    "landscape": "sone-150_pl.jpg"
+  },
+  "sampleImages": [],
+  "userFavorite": false,
+  "userRating": null,
+  "userMemo": ""
+}

@@ -1,0 +1,25 @@
+﻿{
+  "identifier": "MXSPS-569",
+  "provider": null,
+  "providers": [
+    "Fanza"
+  ],
+  "url": null,
+  "scrapedAt": "2026-06-29T14:51:09.8737708Z",
+  "title": "",
+  "maker": "",
+  "label": "",
+  "series": "",
+  "releaseDate": "",
+  "runtime": null,
+  "actresses": [],
+  "genres": [],
+  "covers": {
+    "portrait": null,
+    "landscape": null
+  },
+  "sampleImages": [],
+  "userFavorite": false,
+  "userRating": null,
+  "userMemo": ""
+}

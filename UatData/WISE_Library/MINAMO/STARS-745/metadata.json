@@ -1,0 +1,30 @@
+﻿{
+  "identifier": "STARS-745",
+  "provider": "AvWiki",
+  "providers": [
+    "Fanza",
+    "AvWiki"
+  ],
+  "url": "https://av-wiki.net/stars-745/",
+  "scrapedAt": "2026-06-29T15:32:28.4272836Z",
+  "title": "\u521D\uFF011\u30F6\u6708\u306E\u7981\u6B32\u89E3\u7981\uFF01\u6975\u9650\u306E\u6211\u6162\u72B6\u614B\u304B\u3089\u306E\u6027\u6B32\u8D85\u5927\u89E3\u653E\uFF01\uFF01\u30C1\u25CB\u30DD\u3092\u8CAA\u308A\u55B0\u3044\u307E\u304F\u308B\uFF01\u767A\u60C5\u30BB\u30C3\u30AF\u30B9\u30C9\u30AD\u30E5\u30E1\u30F3\u30C8\uFF01\uFF01\uFF01 MINAMO",
+  "maker": "SOD\u30AF\u30EA\u30A8\u30A4\u30C8",
+  "label": "SOD star",
+  "series": "",
+  "releaseDate": "2023-01-05",
+  "runtime": null,
+  "actresses": [
+    {
+      "name": "MINAMO"
+    }
+  ],
+  "genres": [],
+  "covers": {
+    "portrait": "stars-745_ps.jpg",
+    "landscape": null
+  },
+  "sampleImages": [],
+  "userFavorite": false,
+  "userRating": null,
+  "userMemo": ""
+}

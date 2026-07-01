@@ -50,10 +50,19 @@ public class AdultWikiMetadataProvider : IMetadataProvider
                     "Identifier format not supported", sw.Elapsed);
             }
 
-            var url = $"https://adult-wiki.net/details/?pno={pno}";
-            _logger.LogInformation("[AdultWiki] Fetch {Url}", url);
+            // adult-wiki.net は pno だけでは 404。検索ページから詳細URL を抽出する必要がある。
+            var searchUrl = $"https://adult-wiki.net/search/?keyword={pno}";
+            var detailUrl = await ResolveDetailUrlAsync(searchUrl, pno, context.CancellationToken);
+            if (detailUrl == null)
+            {
+                _logger.LogInformation("[AdultWiki] 検索結果から詳細URLが見つからない: {Pno}", pno);
+                return MetadataResult.Failed(ProviderId, FailureReason.NotFound,
+                    "Detail page not found in search results", sw.Elapsed);
+            }
 
-            var req = new HttpRequestMessage(HttpMethod.Get, url);
+            _logger.LogInformation("[AdultWiki] Fetch {Url}", detailUrl);
+
+            var req = new HttpRequestMessage(HttpMethod.Get, detailUrl);
             req.Headers.Add("User-Agent",
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
             req.Headers.Add("Accept", "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8");
@@ -65,13 +74,13 @@ public class AdultWikiMetadataProvider : IMetadataProvider
 
             if (!response.IsSuccessStatusCode)
             {
-                _logger.LogInformation("[AdultWiki] HTTP {Status} {Url}", response.StatusCode, url);
+                _logger.LogInformation("[AdultWiki] HTTP {Status} {Url}", response.StatusCode, detailUrl);
                 return MetadataResult.Failed(ProviderId, FailureReason.NotFound,
                     $"HTTP {(int)response.StatusCode}", sw.Elapsed);
             }
 
             var html = await response.Content.ReadAsStringAsync(context.CancellationToken);
-            var candidates = ParseHtml(html, url);
+            var candidates = ParseHtml(html, detailUrl);
 
             if (candidates.Count == 0)
                 return MetadataResult.Failed(ProviderId, FailureReason.ParserError,
@@ -275,6 +284,33 @@ public class AdultWikiMetadataProvider : IMetadataProvider
                 : rawValue.Split(new[] { '\n', '、', ',' }, StringSplitOptions.RemoveEmptyEntries).Select(t => t.Trim());
             foreach (var tag in tags.Where(t => !string.IsNullOrWhiteSpace(t) && !genreList.Contains(t)))
                 genreList.Add(tag);
+        }
+    }
+
+    // 検索ページから詳細URLを抽出（adult-wiki.net は pno だけでは 404 になるため）
+    private async Task<string?> ResolveDetailUrlAsync(string searchUrl, string pno, CancellationToken ct)
+    {
+        try
+        {
+            var req = new HttpRequestMessage(HttpMethod.Get, searchUrl);
+            req.Headers.Add("User-Agent",
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
+            var res = await _httpClient.SendAsync(req, ct);
+            if (!res.IsSuccessStatusCode) return null;
+            var html = await res.Content.ReadAsStringAsync(ct);
+
+            // 検索結果から詳細URLを抽出: href="/details/?actress=...&pno=rpin00010"
+            var m = Regex.Match(html, @"href=""(/details/\?[^""]*pno=" + Regex.Escape(pno) + @"[^""]*)""");
+            if (m.Success)
+            {
+                var path = m.Groups[1].Value;
+                return "https://adult-wiki.net" + System.Net.WebUtility.HtmlDecode(path);
+            }
+            return null;
+        }
+        catch
+        {
+            return null;
         }
     }
 

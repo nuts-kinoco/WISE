@@ -1,0 +1,30 @@
+﻿{
+  "identifier": "STARS-823",
+  "provider": "AvWiki",
+  "providers": [
+    "Fanza",
+    "AvWiki"
+  ],
+  "url": "https://av-wiki.net/stars-823/",
+  "scrapedAt": "2026-06-29T15:37:49.1522676Z",
+  "title": "\u304B\u3064\u3066\u72AF\u25CF\u308C\u305F\u5927\u5ACC\u3044\u306A\u30E4\u30EA\u30C1\u30F3\u8AB2\u9577\u306B\u30C7\u30FC\u30C8\u30EC\u25CF\u30D7\u30C9\u30E9\u30C3\u30B0\u3092\u76DB\u3089\u308C\u6C17\u304C\u3064\u3044\u305F\u3089\u65C5\u9928\u306E\u4E00\u5BA4\u3067\u671D\u307E\u3067\u4F11\u307F\u306A\u304F\u30E4\u3089\u308C\u307E\u304F\u3063\u3066\u3044\u305F\u2026 \u767E\u4EC1\u82B1",
+  "maker": "SOD\u30AF\u30EA\u30A8\u30A4\u30C8",
+  "label": "SOD star",
+  "series": "",
+  "releaseDate": "2023-04-04",
+  "runtime": null,
+  "actresses": [
+    {
+      "name": "\u767E\u4EC1\u82B1"
+    }
+  ],
+  "genres": [],
+  "covers": {
+    "portrait": "stars-823_ps.jpg",
+    "landscape": null
+  },
+  "sampleImages": [],
+  "userFavorite": false,
+  "userRating": null,
+  "userMemo": ""
+}

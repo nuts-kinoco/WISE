@@ -1,0 +1,30 @@
+﻿{
+  "identifier": "MIDV-487",
+  "provider": "AvWiki",
+  "providers": [
+    "Fanza",
+    "AvWiki"
+  ],
+  "url": "https://av-wiki.net/midv-487/",
+  "scrapedAt": "2026-06-29T15:27:20.1563367Z",
+  "title": "\u30CE\u30FC\u30D6\u30E9\u4E73\u9996\u307D\u3063\u3061\u5C4B\u5185\u9732\u51FA\u3067\u6821\u5185\u306E\u7537\u3092\u7121\u81EA\u899A\u8A98\u60D1\u3059\u308BH\u30AB\u30C3\u30D7\u65B0\u4EFB\u6559\u5E2B \u677E\u6C38\u68A8\u674F",
+  "maker": "\u30E0\u30FC\u30C7\u30A3\u30FC\u30BA",
+  "label": "MOODYZ DIVA",
+  "series": "",
+  "releaseDate": "2023-09-29",
+  "runtime": null,
+  "actresses": [
+    {
+      "name": "\u677E\u6C38\u68A8\u674F"
+    }
+  ],
+  "genres": [],
+  "covers": {
+    "portrait": "midv-487_ps.jpg",
+    "landscape": "midv-487_pl.jpg"
+  },
+  "sampleImages": [],
+  "userFavorite": false,
+  "userRating": null,
+  "userMemo": ""
+}
