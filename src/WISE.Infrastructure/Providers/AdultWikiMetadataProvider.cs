@@ -125,11 +125,19 @@ public class AdultWikiMetadataProvider : IMetadataProvider
                 ? titleNode.GetAttributeValue("content", "")
                 : System.Net.WebUtility.HtmlDecode(titleNode.InnerText.Trim());
 
-            // 【RPIN-010】 / RPIN-010 などのプレフィックスを除去
+            // og:title 例: "RPIN-010 タイトル本体に出演している女優さん | AV女優WIKI"
+            // または: "RPIN-010 タイトル本体 | AV女優WIKI"
+
+            // 【RPIN-010】/ RPIN-010 などのプレフィックスを除去
             raw = Regex.Replace(raw, @"^【[^】]+】\s*", "").Trim();
             raw = Regex.Replace(raw, @"^[A-Za-z]+-?\d+\s+", "").Trim();
-            // "の無修正動画" などのサイト固有サフィックスを除去
-            raw = Regex.Replace(raw, @"\s*(の|は|が).{0,20}(動画|女優|AV|無修正).*$", "").Trim();
+
+            // " | " で分割されているサイト情報を削除
+            raw = Regex.Split(raw, @"\s*\|\s*")[0].Trim();
+
+            // 末尾の説明文を削除: "に出演している女優さん" / "の動画" など
+            // ただし、タイトル本体に含まれる "が" で誤検出しないよう、より厳密に
+            raw = Regex.Replace(raw, @"(に出演している女優|に出演している|の無料動画|の動画).*$", "").Trim();
 
             if (!string.IsNullOrWhiteSpace(raw) && raw.Length > 2)
             {
@@ -180,6 +188,7 @@ public class AdultWikiMetadataProvider : IMetadataProvider
                 var td = row.SelectSingleNode(".//td");
                 if (th == null || td == null) continue;
                 var key = System.Net.WebUtility.HtmlDecode(th.InnerText.Trim());
+                _logger.LogDebug("[AdultWiki] Table row key={Key}", key);
                 ProcessKeyValue(key, td, results, genreList, url);
             }
         }
@@ -195,6 +204,7 @@ public class AdultWikiMetadataProvider : IMetadataProvider
                     dd = dd.NextSibling;
                 if (dd?.Name != "dd") continue;
                 var key = System.Net.WebUtility.HtmlDecode(dt.InnerText.Trim());
+                _logger.LogDebug("[AdultWiki] DL row key={Key}", key);
                 ProcessKeyValue(key, dd, results, genreList, url);
             }
         }
@@ -211,6 +221,7 @@ public class AdultWikiMetadataProvider : IMetadataProvider
                     valueNode = valueNode.NextSibling;
                 if (valueNode == null) continue;
                 var key = System.Net.WebUtility.HtmlDecode(span.InnerText.Trim());
+                _logger.LogDebug("[AdultWiki] Span row key={Key}", key);
                 ProcessKeyValue(key, valueNode, results, genreList, url);
             }
         }
