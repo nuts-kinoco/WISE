@@ -148,10 +148,10 @@ export default function ReaderPage({ params }: { params: Promise<{ id: string }>
     else goTo(currentPage - step);
   }, [currentPage, direction, pageMode, goTo]);
 
-  // ── Keyboard shortcuts ──────────────────────────────────────────────────────
+  // ── Keyboard & Mouse wheel shortcuts ──────────────────────────────────────────
 
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
+    const keyHandler = (e: KeyboardEvent) => {
       switch (e.key) {
         case "ArrowRight": advance(); break;
         case "ArrowLeft":  retreat(); break;
@@ -162,9 +162,24 @@ export default function ReaderPage({ params }: { params: Promise<{ id: string }>
         case "Escape": if (isFullscreen) document.exitFullscreen(); break;
       }
     };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [advance, retreat, goTo, totalPages, isFullscreen]);
+
+    const wheelHandler = (e: WheelEvent) => {
+      // マウスホイール: 下（正の deltaY）で次ページ、上（負の deltaY）で前ページ
+      // RTL/LTR に応じて方向反転
+      if (e.deltaY > 0) {
+        if (direction === "rtl") retreat(); else advance();
+      } else if (e.deltaY < 0) {
+        if (direction === "rtl") advance(); else retreat();
+      }
+    };
+
+    window.addEventListener("keydown", keyHandler);
+    containerRef.current?.addEventListener("wheel", wheelHandler, { passive: true });
+    return () => {
+      window.removeEventListener("keydown", keyHandler);
+      containerRef.current?.removeEventListener("wheel", wheelHandler);
+    };
+  }, [advance, retreat, goTo, totalPages, isFullscreen, direction]);
 
   // ── Auto-hide controls ──────────────────────────────────────────────────────
 
@@ -366,8 +381,8 @@ export default function ReaderPage({ params }: { params: Promise<{ id: string }>
 
       {/* ── Page display area ── */}
       <div className="flex-1 overflow-hidden bg-black h-full">
-        {/* 2P: grid で厳密に50/50分割 — flex+w-[50vw]はサブピクセル境界で白線が出る */}
-        <div className={`h-full w-full ${pageMode === "double" ? "grid grid-cols-2" : "flex items-center justify-center"}`}>
+        {/* 2P: gap-0 で中央の白い線を完全に消去 */}
+        <div className={`h-full w-full ${pageMode === "double" ? "grid grid-cols-2 gap-0" : "flex items-center justify-center"}`}>
           {pageIndexes.map((pi) => (
             <div
               key={pi}
