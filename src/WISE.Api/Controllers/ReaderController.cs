@@ -49,7 +49,17 @@ namespace WISE.Api.Controllers
             if (reader == null)
                 return UnprocessableEntity(new { error = "No archive reader available for this file type." });
 
-            var pages = await reader.GetPagesAsync(archiveAsset.FilePath, HttpContext.RequestAborted);
+            IReadOnlyList<WISE.Domain.Interfaces.ArchivePage> pages;
+            try
+            {
+                pages = await reader.GetPagesAsync(archiveAsset.FilePath, HttpContext.RequestAborted);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[Reader] Failed to enumerate pages for work {WorkId} at {Path}", workId, archiveAsset.FilePath);
+                return StatusCode(500, new { error = "アーカイブのページ一覧を取得できませんでした。" });
+            }
+
             return Ok(new
             {
                 workId = work.Id,

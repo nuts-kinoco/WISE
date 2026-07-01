@@ -17,10 +17,10 @@ public class FolderArchiveReader : IArchiveReader
 
     public Task<IReadOnlyList<ArchivePage>> GetPagesAsync(string filePath, CancellationToken ct = default)
     {
-        var pages = Directory.EnumerateFiles(filePath, "*", SearchOption.TopDirectoryOnly)
+        var pages = Directory.EnumerateFiles(filePath, "*", SearchOption.AllDirectories)
             .Where(f => ImageExtensions.Contains(Path.GetExtension(f)))
             .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
-            .Select((f, i) => new ArchivePage(i, Path.GetFileName(f), GetContentType(f)))
+            .Select((f, i) => new ArchivePage(i, Path.GetRelativePath(filePath, f), GetContentType(f)))
             .ToList();
 
         return Task.FromResult<IReadOnlyList<ArchivePage>>(pages);
@@ -28,7 +28,7 @@ public class FolderArchiveReader : IArchiveReader
 
     public Task<Stream> OpenPageAsync(string filePath, int pageIndex, CancellationToken ct = default)
     {
-        var files = Directory.EnumerateFiles(filePath, "*", SearchOption.TopDirectoryOnly)
+        var files = Directory.EnumerateFiles(filePath, "*", SearchOption.AllDirectories)
             .Where(f => ImageExtensions.Contains(Path.GetExtension(f)))
             .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
             .ToList();

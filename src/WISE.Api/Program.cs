@@ -114,6 +114,12 @@ builder.Services.AddScoped<IMetadataProvider>(sp => sp.GetRequiredService<JavBus
 builder.Services.AddSingleton<PlaywrightBrowserService>();
 builder.Services.AddScoped<JavLibraryMetadataProvider>();
 builder.Services.AddScoped<IMetadataProvider>(sp => sp.GetRequiredService<JavLibraryMetadataProvider>());
+// AdultWiki: Tier-2 最終フォールバック（RPIN 系など公式未収録品番のカバレッジ補完、Priority=30）
+builder.Services.AddHttpClient<AdultWikiMetadataProvider>()
+    .AddHttpMessageHandler<CachingHandler>()
+    .AddHttpMessageHandler<RateLimitingHandler>()
+    .AddPolicyHandler(MetadataRetryPolicy());
+builder.Services.AddScoped<IMetadataProvider>(sp => sp.GetRequiredService<AdultWikiMetadataProvider>());
 builder.Services.AddScoped<MetadataService>();
 builder.Services.AddScoped<IMetadataConflictResolver, MetadataConflictResolver>();
 builder.Services.AddSingleton<WISE.Application.Services.IJobCancellationService, WISE.Application.Services.JobCancellationService>();

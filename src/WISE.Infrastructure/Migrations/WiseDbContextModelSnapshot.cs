@@ -578,6 +578,39 @@ namespace WISE.Infrastructure.Migrations
                     b.ToTable("HISTORY_RECORD", (string)null);
                 });
 
+            modelBuilder.Entity("WISE.Infrastructure.Data.Models.HttpCache", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CachedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ContentType")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExpiresAt");
+
+                    b.HasIndex("Url")
+                        .IsUnique();
+
+                    b.ToTable("HttpCaches");
+                });
+
             modelBuilder.Entity("WISE.Infrastructure.Data.Models.JobDefinition", b =>
                 {
                     b.Property<Guid>("Id")

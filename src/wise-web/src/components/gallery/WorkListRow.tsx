@@ -82,7 +82,7 @@ export function WorkListRow({ work, style }: Props) {
 
         {/* Identifier */}
         {showIdentifier && (
-          <span className="flex-none w-[110px] text-[11px] font-mono text-primary/70 uppercase tracking-wider truncate">
+          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-mono uppercase tracking-wider bg-primary/10 text-primary/70 border border-primary/15 flex-none max-w-[110px] truncate">
             {work.primaryIdentifier ?? "—"}
           </span>
         )}

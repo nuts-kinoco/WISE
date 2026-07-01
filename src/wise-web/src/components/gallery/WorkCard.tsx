@@ -172,13 +172,19 @@ export function WorkCard({ work, style }: Props) {
         {isRich && (
           <div className={`flex flex-col min-w-0 px-2.5 ${isRich ? "py-2.5 gap-1.5" : "py-2 gap-0.5"}`}>
 
-            {/* Row 1: identifier + inline status dot + rating (normal) */}
+            {/* Row 1: identifier badge + companion text (circle/maker) + status dot */}
             <div className="flex items-center gap-1.5 min-w-0">
               {show("identifier") && (
-                <span className="text-[10px] font-mono text-primary/60 uppercase tracking-wider truncate flex-1 min-w-0">
-                  {work.primaryIdentifier ?? "—"}
-                </span>
+                <>
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-mono uppercase tracking-wider bg-primary/10 text-primary/70 border border-primary/15 flex-none max-w-[100px] truncate">
+                    {work.primaryIdentifier ?? "—"}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground/55 truncate flex-1 min-w-0">
+                    {isComicType ? (work.circle ?? null) : (work.maker ?? null)}
+                  </span>
+                </>
               )}
+              {!show("identifier") && <span className="flex-1 min-w-0" />}
               {/* Subtle status dot when not shown as overlay */}
               {!show("status") && (
                 <span className={`w-1.5 h-1.5 rounded-full flex-none ${statusDot}`} title={work.metadataStatus} />
