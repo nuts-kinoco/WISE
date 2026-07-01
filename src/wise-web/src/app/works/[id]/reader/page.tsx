@@ -244,7 +244,7 @@ export default function ReaderPage({ params }: { params: Promise<{ id: string }>
   return (
     <div
       ref={containerRef}
-      className="relative flex flex-col min-h-screen bg-black select-none"
+      className="relative flex flex-col h-screen w-screen bg-black select-none"
       onMouseMove={resetHideTimer}
       onClick={resetHideTimer}
     >
@@ -365,13 +365,13 @@ export default function ReaderPage({ params }: { params: Promise<{ id: string }>
       )}
 
       {/* ── Page display area ── */}
-      <div className="flex-1 overflow-hidden bg-black">
+      <div className="flex-1 overflow-hidden bg-black h-full">
         {/* 2P: grid で厳密に50/50分割 — flex+w-[50vw]はサブピクセル境界で白線が出る */}
         <div className={`h-full w-full ${pageMode === "double" ? "grid grid-cols-2" : "flex items-center justify-center"}`}>
           {pageIndexes.map((pi) => (
             <div
               key={pi}
-              className={`relative bg-black ${pageMode === "double" ? "h-full" : "max-w-[100vh] w-screen h-full"}`}
+              className={`relative bg-black overflow-hidden h-full w-full flex items-center justify-center`}
             >
               <Image
                 key={getReaderPageUrl(id, pi)}
