@@ -99,7 +99,7 @@ function SortTh({
 
 export function GalleryGrid() {
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, status } = useWorks();
-  const { density, coverLayout, listSortKey, listSortAsc, setListSort, searchQuery, setSearchQuery, mediaTypeFilter } = useGalleryStore();
+  const { density, coverLayout, listSortKey, listSortAsc, setListSort, searchQuery, setSearchQuery, mediaTypeFilter, displayFields } = useGalleryStore();
   const windowWidth = useWindowWidth();
 
   const isList = density === "list";
@@ -226,7 +226,9 @@ export function GalleryGrid() {
         <div className="sticky top-16 z-20 bg-background/95 backdrop-blur border-b border-border/40 mb-1">
           <div className="flex items-center gap-3 px-5 py-2">
             <div className="flex-none w-10" />
-            <SortTh label="品番"    sortKey="identifier"  currentKey={listSortKey} asc={listSortAsc} onSort={handleSort} className="flex-none w-[110px]" />
+            {displayFields.identifier && (
+              <SortTh label="品番" sortKey="identifier" currentKey={listSortKey} asc={listSortAsc} onSort={handleSort} className="flex-none w-[110px]" />
+            )}
             <SortTh label="タイトル" sortKey="title"       currentKey={listSortKey} asc={listSortAsc} onSort={handleSort} className="flex-1 min-w-0" />
             <SortTh label="出演者"   sortKey="actress"     currentKey={listSortKey} asc={listSortAsc} onSort={handleSort} className="flex-none w-[140px] hidden md:flex" />
             <SortTh label="メーカー" sortKey="maker"       currentKey={listSortKey} asc={listSortAsc} onSort={handleSort} className="flex-none w-[140px] hidden lg:flex" />

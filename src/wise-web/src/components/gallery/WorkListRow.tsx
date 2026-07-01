@@ -6,6 +6,7 @@ import { Trash2, Heart } from "lucide-react";
 import { deleteWork, patchUserData, type WorkItem } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { useGalleryStore } from "@/store/useGalleryStore";
 import { resolveCoverUrl } from "@/lib/media";
 
 interface Props {
@@ -24,6 +25,7 @@ export function WorkListRow({ work, style }: Props) {
   const queryClient = useQueryClient();
   const [confirm, setConfirm] = useState(false);
   const [fav, setFav] = useState(work.favorite);
+  const showIdentifier = useGalleryStore((s) => s.displayFields.identifier);
   const src = resolveCoverUrl(work.coverUrl);
   const hasData = !!(work.title || work.actress);
   const isPending = !hasData
@@ -79,9 +81,11 @@ export function WorkListRow({ work, style }: Props) {
         </div>
 
         {/* Identifier */}
-        <span className="flex-none w-[110px] text-[11px] font-mono text-primary/70 uppercase tracking-wider truncate">
-          {work.primaryIdentifier ?? "—"}
-        </span>
+        {showIdentifier && (
+          <span className="flex-none w-[110px] text-[11px] font-mono text-primary/70 uppercase tracking-wider truncate">
+            {work.primaryIdentifier ?? "—"}
+          </span>
+        )}
 
         {/* Title */}
         <span className="flex-1 min-w-0 text-sm text-foreground truncate">

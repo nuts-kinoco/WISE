@@ -110,6 +110,11 @@ builder.Services.AddHttpClient<JavBusMetadataProvider>()
     .AddHttpMessageHandler<RateLimitingHandler>()
     .AddPolicyHandler(MetadataRetryPolicy());
 builder.Services.AddScoped<IMetadataProvider>(sp => sp.GetRequiredService<JavBusMetadataProvider>());
+builder.Services.AddHttpClient<JavLibraryMetadataProvider>()
+    .AddHttpMessageHandler<CachingHandler>()
+    .AddHttpMessageHandler<RateLimitingHandler>()
+    .AddPolicyHandler(MetadataRetryPolicy());
+builder.Services.AddScoped<IMetadataProvider>(sp => sp.GetRequiredService<JavLibraryMetadataProvider>());
 builder.Services.AddScoped<MetadataService>();
 builder.Services.AddScoped<IMetadataConflictResolver, MetadataConflictResolver>();
 builder.Services.AddSingleton<WISE.Application.Services.IJobCancellationService, WISE.Application.Services.JobCancellationService>();
@@ -147,6 +152,7 @@ var dbPath = Path.Combine(appDataPath, "wise.db");
 builder.Services.AddDbContext<WiseDbContext>(options =>
 {
     options.UseSqlite($"Data Source={dbPath}");
+    options.AddInterceptors(new WISE.Infrastructure.Data.SqlitePragmaInterceptor());
 });
 builder.Services.AddScoped<IWorkRepository, WISE.Infrastructure.Data.Repositories.WorkRepository>();
 builder.Services.AddScoped<IReadingHistoryRepository, WISE.Infrastructure.Data.Repositories.ReadingHistoryRepository>();

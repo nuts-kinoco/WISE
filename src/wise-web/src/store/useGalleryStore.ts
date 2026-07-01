@@ -24,7 +24,7 @@ export const DISPLAY_FIELD_LABELS = {
 export type DisplayField = keyof typeof DISPLAY_FIELD_LABELS;
 
 export const DEFAULT_DISPLAY: Record<DisplayField, boolean> = {
-  identifier:  true,
+  identifier:  false,
   title:       true,
   actress:     true,
   maker:       false,
