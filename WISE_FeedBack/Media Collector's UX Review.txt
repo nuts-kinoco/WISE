@@ -1,0 +1,32 @@
+As a collector with 200,000 items (80k AV, 120k Comics) and 50TB of data, my needs are far beyond the average user. My primary concern is managing scale, resolving edge cases, and finding what I want instantly. Here is my review of WISE v2 from that perspective:
+
+1. Would you use WISE every day?
+Yes, but only if it respects my time. With 50TB, I cannot afford to wait for loading screens or background jobs that block my workflow. The "Gallery" first approach is great, but the true test is whether I can open it, type a query, and hit play/read within 3 seconds. The promise of "UI virtualization" and "infinite scroll" in the design docs is exactly what I need. If it stutters, I'm out.
+
+2. What frustrates you?
+"Orphaned" files: The documents mention orphaned assets going to an "Inbox". With 200,000 items, I could easily have 5,000 orphaned items after a big import. Processing these manually is a nightmare. I need bulk tools, AI-assisted guessing, or the ability to just say "treat this folder as one work even if you don't know what it is."
+Over-reliance on Scrapers: Scrapers die. Sites change. If a scraper fails and leaves a work "empty", I need a seamless way to manually edit or apply a local file without feeling like I'm fighting the system..nfo
+The "One True Cover" problem: Scrapers often pick terrible, low-res, or censored covers. I need a fast way to swap covers, ideally dragging and dropping an image directly onto the card in the Gallery.
+3. What is missing?
+Bulk Editing / Mass Tagging: The docs mention "Shift/Ctrl + Click" for multi-select, but don't specify what I can do with it. I need to select 500 works and say "Add tag: 'Vintage'", "Change Maker to X", or "Move to Storage Drive 2".
+Deduplication UI: At 50TB, I have duplicates. Finding them via SHA256 is fine, but I need a side-by-side "Compare View" (mentioned as a future feature in UI.md, but it's essential now) to see which version is higher resolution, has subtitles, or is uncensored, before merging or deleting.
+Storage Management: Where is my 50TB? I need to know which drive is full. "Smart Folders" are great, but I need physical storage awareness.
+4. What would make organization easier?
+"Smart Folders" as first-class citizens: This is the most important feature. I need to create rules like: to find things to delete or upgrade.MediaType=Video AND Resolution<1080p AND LastPlayed>1YearAgo
+Hierarchical Tags: Tags shouldn't just be a flat list. I need , , .Theme: SchoolTheme: Sci-FiCensorship: Uncensored
+5. What metadata matters most?
+For a collection this size, basic metadata (Title, Maker, Release Date) is assumed. What matters most for organization is:
+
+Resolution / Quality / Bitrate: (Asset metadata) Is this the 4K version or a 720p rip?
+Completeness: Is this comic missing pages? Is this video a sample or the full 2-hour movie?
+Actors / Circles: The primary pivot point for finding related content.
+User Rating / Play Count: With 200k items, I need to know what I actually like and what I haven't touched in 5 years.
+6. How should Gallery evolve?
+Density is King: The "Compact" view needs to be really compact for mass organization, maybe just a list with tiny thumbnails. The "Large" view is for browsing, but I need a spreadsheet-like mode for bulk triage (even if the docs rejected the "Excel-like data grid", I still need high-density data views for management).
+Instant Filtering: The "Filters" dropdown needs to be a persistent, faceted sidebar. Click "Studio X" -> list instantly updates. Click "Actor Y" -> list updates again.
+7. How should Detail evolve?
+Don't make me click: The detail pane should ideally slide out or appear on the right side of the screen when I select an item in the gallery, rather than navigating away to a whole new page. I want to arrow-key through the gallery and see details instantly update on the side.
+Asset primacy: Put the "Play" or "Read" button front and center. I don't want to scroll past a block of metadata to find the file.
+8. How should collections work?
+Dynamic over Static: I have no time to manually add works to a "Playlist". I need Smart Folders to do the heavy lifting.
+Cross-Media relations: If I have the AV work and the original Doujin comic it was based on, they should link to each other, or at least be easily groupable under a single "Franchise" or "Original Work" collection.

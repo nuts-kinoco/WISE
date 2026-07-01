@@ -1,0 +1,39 @@
+Executive Summary
+WISE v2 is designed with a strong, modern philosophy that elevates it from a raw data scraping tool to a premium media library experience. The architectural guidelines and initial component structures show a clear intention to follow fluent design principles, prioritizing cover art and visual hierarchy over dense tabular data. The application effectively handles multiple media types (Video, Comic, Book, etc.) and provides robust display density options. However, some current implementation details in the Gallery and Detail views still cling to traditional "management tool" paradigms. To truly align with the standards set by Netflix, Plex, and Apple Photos, WISE needs to further reduce visual noise, enhance the emotional connection with the artwork, and refine its empty/loading states to feel more organic and less technical.
+
+Strengths
+Strong Foundational Philosophy: The mandate "WISE is not a management tool" is excellent. The emphasis on "subtraction" and prioritizing the over the file system is the correct approach for a consumer-grade media library.Work
+Responsive Display Densities: The inclusion of , , , and modes allows users to tailor the experience, similar to Steam's library views.compactnormalrichlist
+Virtualization & Performance: The use of for the Gallery grid ensures a smooth, Netflix-like scrolling experience even with massive libraries.useWindowVirtualizer
+Clear State Representation: The use of visual badges and skeleton loaders instead of text-heavy status messages is a strong UX choice.
+Media Type Abstraction: The unified approach that dynamically adapts its layout (portrait vs. landscape) based on the media type is well thought out.WorkCard
+Weaknesses
+Data Overload in Cards: Even in "normal" density, the component attempts to show too much (Rating, HD badge, Missing status, Title, Identifier). Netflix and Apple Photos keep standard library views extremely clean—often just the artwork, revealing details only on hover or focus.WorkCard
+Detail Page Clutter: The Detail page wireframe suggests a top-heavy layout that quickly degrades into a technical log (Assets list, Diagnostics, History Timeline). This breaks immersion.
+Technical Language in UI: Terms like "Identifier Resolved", "Metadata Fetched", and "Diagnostics" are developer-centric. Plex or Netflix would never show a user "Confidence 95%" or "Regex Evidence."
+List View Compromise: The list view includes columns like "品番" (Identifier) and "レーベル" (Label) which are highly specific to certain content types and feel very spreadsheet-like, contradicting the "not an Excel grid" rule.
+Philosophy Violations
+"Would Netflix display this this way?" Violation - The Detail Page Diagnostics: Netflix hides streaming bitrates and CDN data deep in debug menus. WISE displaying "Diagnostics (Identifier: 95% Confidence, Evidence: FANZA, Regex...)" on the main Detail page violates the immersive experience.
+"Would Apple Photos display this this way?" Violation - Empty States: The current empty state ( icon, "ライブラリが空です") is purely functional. Apple Photos uses beautiful, stylized illustrations and inspiring copy to encourage adding content, not a sterile hard drive icon.HardDriveUpload
+Visual Noise in Gallery: The wireframe includes , , and badges permanently visible on the gallery covers. This clutters the visual field. Modern libraries use subtle corner indicators or only show technical badges on hover.[Missing][Conflict][HD]
+UI/UX Suggestions
+Hover-Reveal Mechanics: Implement strong hover states on . In the default state, show only the cover image. On hover, apply a subtle scrim (gradient overlay) and reveal the Title, Rating, and any critical badges (like Missing).WorkCard
+Redesign the Detail Page Hierarchy:
+Zone 1 (Immersion): Massive hero banner (blurred background with crisp cover), Title, User Rating, Synopsis, and a clear "Play/Read" primary action button.
+Zone 2 (Context): Cast, Tags, Genres (presented as clean chips).
+Zone 3 (Technical - Hidden by default): Move Assets, Diagnostics, and History into an accordion or a separate "Technical Details" tab.
+Refine Error/Status Indicators: Instead of large yellow badges, use subtle colored dots or borders (e.g., a thin amber ring around the cover for conflict, a red ring for missing file).[Conflict]
+Soften Empty States: Replace the icon with a softer, perhaps abstract illustration representing a library or theater. Change the copy from "Import Works" to "Build your collection."HardDriveUpload
+Simplify the List View: If a list view is mandatory, remove the "Identifier" column by default. Focus on Title, Year, and Media Type.
+Priority Improvements (High → Low)
+High: Strip default metadata from the Gallery (Compact/Normal modes) and move it to a hover state to maximize artwork visibility.WorkCard
+High: Relocate "Diagnostics", "Assets", and "History" on the Detail page into collapsed sections or a separate tab to prevent "management tool" vibes.
+Medium: Redesign the Empty and Error states to be more inviting and less technical.
+Medium: Replace text-heavy status indicators with universally understood iconography (e.g., a simple broken link icon for missing files).
+Low: Abstract technical job names in the Job Queue Panel into user-friendly terms (e.g., "MetadataFetching" -> "Gathering Info").
+Screens or pages requiring redesign
+Detail Page (/works/[id]/page.tsx): Needs a severe restructuring to separate the "consumer view" from the "librarian/debug view."
+Empty State Component (in GalleryGrid.tsx): Needs to be rewritten to feel less like a system error and more like an onboarding opportunity.
+List View Density (WorkListRow.tsx context): Needs to be reviewed to ensure it doesn't accidentally replicate the banned "Excel grid" feeling by hiding non-essential columns by default.
+Final Verdict
+WISE v2 possesses a brilliant architectural foundation and a highly capable technical stack for building a world-class media library. The stated design philosophy is exactly right. However, the current component implementation and wireframes occasionally slip back into the comfort zone of a "file management utility." By ruthlessly applying the "Would Netflix do this?" test—specifically by hiding technical data, relying on hover states, and prioritizing high-quality cover art above all else—WISE can achieve its goal of being a product that is "fun just to look at."

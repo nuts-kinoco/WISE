@@ -1,0 +1,42 @@
+WISE v2 SQLite Database Architecture Review
+Here is the requested architectural review of the WISE v2 SQLite database. The review is based on an analysis of the EF Core , the latest EF Core , and live queries executed against the SQLite schema.WiseDbContextModelSnapshot
+
+1. Schema & Normalization
+EAV Pattern (Entity-Attribute-Value): The table uses an EAV model to store diverse attributes (e.g., Title, Genre, Maker). While highly flexible and avoiding schema alterations when adding s like Comic or Book, EAV tables are notoriously difficult to query relationally and can degrade performance if not properly indexed.MetadataFieldsMediaType
+Normalization: The database is mostly in 3NF. However, (used for deduplication/merging) lacks a formal self-referencing Foreign Key constraint, meaning referential integrity relies entirely on application-level logic. If a target Work is deleted, the pointer will become a dead link.Works.MergedIntoIdMergedIntoId
+2. Indexes
+Missing EAV Indexes: The table currently only has an index on . There is no index on or . Querying for specific metadata attributes forces a full table scan. MetadataFieldsWorkIdFieldNameValue
+Evidence: is the only index.IX_MetadataFields_WorkId
+Query Plan Evidence:
+EXPLAIN QUERY PLAN SELECT * FROM MetadataFields WHERE FieldName = 'Title' AND Value = 'SomeTitle';
+-- Result: `--SCAN MetadataFields
+Missing Operational Indexes: The table lacks indexes on operational columns like , , and . As the suggests that filtering by and (e.g., ) will be heavily used, missing these will cause full table scans on the main table.WorksStatusMediaTypeFavoriteCOMIC_ARCHITECTURE_REVIEW.mdMediaTypeStatusScanPendingWorks
+Missing Foreign Key Indexes: does not have an independent non-unique index (though it is part of a composite unique index, querying by alone to find all collections a work belongs to might be unoptimized depending on index column order).CollectionItems.WorkIdWorkId
+3. Constraints & Integrity
+Orphaned Assets (SET NULL): Deleting a sets to NULL rather than cascading the delete. This design leaves orphaned media files in the database. A scheduled cleanup job is required to maintain integrity, or this should be changed to / .
+entity.HasMany(e => e.Assets).WithOne(a => a.Work).HasForeignKey(a => a.WorkId).OnDelete(DeleteBehavior.SetNull);
+WorkAsset.WorkIdDeleteBehavior.CascadeRestrict
+Foreign Key Enforcement: SQLite disables Foreign Key constraints by default. The application must ensure is executed on every connection (typically handled by EF Core connection string ), otherwise, SQLite will not enforce the ON DELETE rules.PRAGMA foreign_keys = ON;Foreign Keys=True
+4. Relationships
+Collections N:M Mapping: The table correctly maps the many-to-many relationship between and with a composite unique constraint: CollectionItemsCollectionsWorksCREATE UNIQUE INDEX "IX_CollectionItems_CollectionId_WorkId" ON "CollectionItems" ("CollectionId", "WorkId");
+Encapsulation: The domain entities successfully encapsulate navigation collections using backing fields (e.g., , )._assets_metadataFields
+5. Full-Text Search (FTS)
+Status: Not Implemented.
+Risk: The application relies on queries against the EAV table for search functionality. In SQLite, leading wildcards () cannot use standard B-Tree indexes and will always result in a full table scan ().LIKE '%keyword%'MetadataFields%keywordSCAN MetadataFields
+Recommendation: As proposed in the architecture review document, creating an virtual table is critical for scalability.FTS5
+CREATE VIRTUAL TABLE WorkSearchIndex USING fts5(work_id UNINDEXED, identifier, title, actress, circle);
+6. Query Plans
+Primary Identifier Lookup (Optimal):
+EXPLAIN QUERY PLAN SELECT * FROM Works WHERE PrimaryIdentifier = 'RJ123456';
+-- Result: `--SEARCH Works USING INDEX IX_Works_PrimaryIdentifier (PrimaryIdentifier=?)
+EAV Filtering (Sub-optimal): Filtering by a specific field name and performing a text match results in a linear table scan.
+7. N+1 Risks
+EF Core Navigation Properties: The entity accesses and as collections. Without explicit in the repositories, querying multiple and attempting to resolve their display titles/covers will result in N+1 database queries.WorksAssetsMetadataFields.Include(w => w.MetadataFields)Works
+Gallery/List Views: Fetching a paginated list of works where each requires metadata mapping will severely impact performance unless projection () or Split Queries () are strictly enforced at the Data Access Layer..Select().AsSplitQuery()
+8. Migration Safety
+SQLite Alter Table Limitations: SQLite has limited support for (e.g., dropping columns or changing data types requires recreating the table and copying data). As the schema evolves (e.g., adding or ), EF Core migrations might generate table rebuilds. On a large library, this locks the database and risks transaction timeouts or massive WAL file growth.ALTER TABLEMediaTypeDisplayProfiles
+Default Values: Adding non-nullable columns without defaults can break existing data during migration. The database correctly sets defaults for properties like (), which mitigates some risks.AppSetting.ValueHasDefaultValue("")
+9. Scalability
+Write Concurrency: SQLite uses database-level locks for writes (or table-level in WAL mode). The , , and tables are highly active append-only tables. Heavy background job processing logging to these tables will block UI-triggered writes to or .EventLogsHISTORY_RECORDJOB_LOGWorksMetadataFields
+Recommendation: Consider splitting highly transactional telemetry/logs (, ) into a separate SQLite file (e.g., ) to prevent background tasks from locking the main read-heavy catalog.JOB_LOGEventLogswise_logs.db
+Summary: The core architecture is solid and domain-driven. However, the EAV implementation requires composite indexing to avoid catastrophic scaling issues, and Full-Text Search (FTS5) is mandatory for acceptable text search performance. Foreign key cascade logic and Write-Ahead Logging (WAL) separation for logs should be reviewed.

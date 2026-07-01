@@ -1,0 +1,56 @@
+Explored the codebase and gathered evidence on vulnerabilities related to folder access and memory exhaustion in ImportUseCase.cs and ExecuteImportJobUseCase.cs.
+
+Updated
+test_script.csx
+I am skipping tests, UI verification, code review, and learning as no code changes were made.
+
+FAIL
+
+Severity: High
+
+Reproduction steps:
+
+Create a directory and set its permissions to (no read access)./tmp/testdir/restricted000
+Send a POST request to with the payload ./api/Import/analyze{"directoryPath": "/tmp/testdir"}
+Expected behavior: The API should return a partial list of files it can access, or gracefully report that it encountered a permission error for certain subdirectories while still analyzing the rest of the valid directories.
+
+Actual behavior: The application throws an unhandled (or similar ) when encounters the restricted directory, aborting the entire directory analysis and returning a (or catching but giving an unhelpful message and failing to return any candidates).System.UnauthorizedAccessExceptionIOException: Permission deniedDirectory.GetFiles500 Internal Server Error400 BadRequestSystem.Exception
+
+Evidence: In at line 46:src/WISE.Api/UseCases/ImportUseCase.cs
+
+var files = Directory.GetFiles(directoryPath, "*.*", SearchOption.AllDirectories)
+    .Where(f => extensions.Contains(Path.GetExtension(f).ToLower()))
+    .ToList();
+Directory.GetFiles with is known to throw an and abort the entire search if it encounters a directory it doesn't have permission to read. This makes the import analyze feature vulnerable to failing completely if even a single subdirectory is restricted.SearchOption.AllDirectoriesUnauthorizedAccessException
+
+FAIL
+
+Severity: Medium
+
+Reproduction steps:
+
+Create a directory ./tmp/huge_folder
+Generate 1,000,000 dummy files in this directory (e.g., using a bash script).
+Send a POST request to with the payload ./api/Import/analyze{"directoryPath": "/tmp/huge_folder"}
+Expected behavior: The application should process the files iteratively, in smaller batches, or stream the results back to avoid running out of memory.
+
+Actual behavior: The application loads all 1,000,000 file paths into a single large array using , filters it, calls , and then attempts to allocate a for every single file inside a massive list before returning the entire result set in memory. This leads to or severe memory exhaustion.Directory.GetFiles.ToList()CandidateDtoOutOfMemoryException
+
+Evidence: In at line 46:src/WISE.Api/UseCases/ImportUseCase.cs
+
+var files = Directory.GetFiles(directoryPath, "*.*", SearchOption.AllDirectories)
+    .Where(f => extensions.Contains(Path.GetExtension(f).ToLower()))
+    .ToList();
+
+var candidates = new List<CandidateDto>();
+// ...
+foreach (var file in files) {
+    // ...
+    candidates.Add(new CandidateDto { ... });
+}
+
+return new AnalyzeResultDto {
+    // ...
+    Candidates = candidates
+};
+Everything is eagerly loaded into memory lists () instead of using streaming () and yielding the results.ToList()Directory.EnumerateFiles
