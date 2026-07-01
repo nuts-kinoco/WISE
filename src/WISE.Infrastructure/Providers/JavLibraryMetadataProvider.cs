@@ -1,31 +1,45 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Net.Http;
 using System.Threading.Tasks;
 using HtmlAgilityPack;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using WISE.Domain.Enums;
 using WISE.Domain.Interfaces;
 using WISE.Domain.Models;
+using WISE.Infrastructure.Data;
+using WISE.Infrastructure.Data.Models;
+using WISE.Infrastructure.Http;
 
 namespace WISE.Infrastructure.Providers;
 
+// Cloudflare の JS チャレンジを Playwright で突破し、HTMLキャッシュ（HttpCaches テーブル）を経由する。
+// HttpClient 版は恒常的にブロックされるため完全に置き換え。
 public class JavLibraryMetadataProvider : IMetadataProvider
 {
-    private readonly HttpClient _httpClient;
+    private readonly PlaywrightBrowserService _playwright;
+    private readonly RateLimiterService _rateLimiter;
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly MetadataProviderOptions _options;
     private readonly ILogger<JavLibraryMetadataProvider> _logger;
 
     private const string BaseUrl = "https://www.javlibrary.com";
+    private const string JavavLibraryDomain = "www.javlibrary.com";
+    private static readonly TimeSpan CacheTtl = TimeSpan.FromHours(24);
 
     public JavLibraryMetadataProvider(
-        HttpClient httpClient,
+        PlaywrightBrowserService playwright,
+        RateLimiterService rateLimiter,
+        IServiceScopeFactory scopeFactory,
         IOptionsMonitor<MetadataProviderOptions> options,
         ILogger<JavLibraryMetadataProvider> logger)
     {
-        _httpClient = httpClient;
+        _playwright = playwright;
+        _rateLimiter = rateLimiter;
+        _scopeFactory = scopeFactory;
         _options = options.Get("JavLibrary") ?? new MetadataProviderOptions { Priority = 45 };
         _logger = logger;
     }
@@ -60,16 +74,10 @@ public class JavLibraryMetadataProvider : IMetadataProvider
             _logger.LogInformation("[JavLibrary] Success | Fields={Count}", results.Count);
             return MetadataResult.Succeeded(ProviderId, results, sw.Elapsed);
         }
-        catch (TaskCanceledException ex) when (!context.CancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException) when (context.CancellationToken.IsCancellationRequested)
         {
             sw.Stop();
-            return MetadataResult.Failed(ProviderId, FailureReason.Timeout, "Timeout", sw.Elapsed, exception: ex);
-        }
-        catch (HttpRequestException ex)
-        {
-            sw.Stop();
-            _logger.LogWarning(ex, "[JavLibrary] Network error");
-            return MetadataResult.Failed(ProviderId, FailureReason.Network, ex.Message, sw.Elapsed, exception: ex);
+            return MetadataResult.Failed(ProviderId, FailureReason.Timeout, "Canceled", sw.Elapsed);
         }
         catch (Exception ex)
         {
@@ -79,85 +87,51 @@ public class JavLibraryMetadataProvider : IMetadataProvider
         }
     }
 
-    // JavLibrary の検索: IDで検索 → 単一ヒットで自動リダイレクト or 結果リストから最初のリンクを辿る
+    // IDで検索: 単一ヒット時は #video_title が直接表示、複数ヒット時は div.video のリストになる。
     private async Task<string?> ResolveVideoPageUrl(MetadataProviderContext context)
     {
         var searchUrl = $"{BaseUrl}/ja/vl_searchbyid.php?keyword={Uri.EscapeDataString(context.Identifier)}";
         _logger.LogInformation("[JavLibrary] Search={Url}", searchUrl);
 
-        var req = BuildRequest(searchUrl);
-        var response = await _httpClient.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, context.CancellationToken);
+        var html = await FetchWithCacheAsync(searchUrl, "#video_title, div.video", context.CancellationToken);
+        if (html == null) return null;
 
-        if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
-            throw new HttpRequestException("429 Rate Limited");
-
-        if (!response.IsSuccessStatusCode)
-            return null;
-
-        var html = await response.Content.ReadAsStringAsync(context.CancellationToken);
-
-        if (IsCloudflareChallenge(html))
-        {
-            _logger.LogWarning("[JavLibrary] Cloudflare protection detected");
-            return null;
-        }
-
-        // 単一ヒット → レスポンスの最終URL が ?v= を含む
-        var finalUrl = response.RequestMessage?.RequestUri?.ToString() ?? searchUrl;
-        if (finalUrl.Contains("?v=") || finalUrl.Contains("&v="))
-            return finalUrl;
-
-        // 複数ヒット → リストから完全一致の品番リンクを探す
         var doc = new HtmlDocument();
         doc.LoadHtml(html);
 
+        // 単一ヒット: #video_title が存在する
+        if (doc.DocumentNode.SelectSingleNode("//div[@id='video_title']") != null)
+            return searchUrl;
+
+        // 複数ヒット: 品番完全一致のリンクを探す
         var idUpper = context.Identifier.ToUpperInvariant();
-        var videoLinks = doc.DocumentNode.SelectNodes(
-            "//div[contains(@class,'video')]//a[contains(@href,'?v=')]");
+        var videoLinks = doc.DocumentNode.SelectNodes("//div[contains(@class,'video')]//a[contains(@href,'?v=')]");
+        if (videoLinks == null) return null;
 
-        if (videoLinks != null)
+        foreach (var link in videoLinks)
         {
-            foreach (var link in videoLinks)
-            {
-                var linkText = link.SelectSingleNode(".//div[contains(@class,'id')]")?.InnerText.Trim()
-                            ?? link.InnerText.Trim();
-                if (linkText.ToUpperInvariant() == idUpper)
-                {
-                    var href = link.GetAttributeValue("href", "");
-                    return href.StartsWith("http") ? href : $"{BaseUrl}/ja/{href.TrimStart('/')}";
-                }
-            }
-
-            // 完全一致なければ最初のリンク
-            var first = videoLinks[0].GetAttributeValue("href", "");
-            if (!string.IsNullOrEmpty(first))
-                return first.StartsWith("http") ? first : $"{BaseUrl}/ja/{first.TrimStart('/')}";
+            var idText = link.SelectSingleNode(".//div[contains(@class,'id')]")?.InnerText.Trim()
+                      ?? link.InnerText.Trim();
+            if (idText.ToUpperInvariant() == idUpper)
+                return NormalizeHref(link.GetAttributeValue("href", ""));
         }
 
-        return null;
+        // 完全一致なければ先頭
+        var firstHref = videoLinks[0].GetAttributeValue("href", "");
+        return string.IsNullOrEmpty(firstHref) ? null : NormalizeHref(firstHref);
     }
 
     private async Task<List<MetadataCandidate>> ParseVideoPage(string url, MetadataProviderContext context)
     {
         _logger.LogInformation("[JavLibrary] Parse={Url}", url);
 
-        var req = BuildRequest(url);
-        var response = await _httpClient.SendAsync(req, context.CancellationToken);
-
-        if (!response.IsSuccessStatusCode)
-            return [];
-
-        var html = await response.Content.ReadAsStringAsync(context.CancellationToken);
-
-        if (IsCloudflareChallenge(html))
-            return [];
+        var html = await FetchWithCacheAsync(url, "#video_title", context.CancellationToken);
+        if (html == null) return [];
 
         var doc = new HtmlDocument();
         doc.LoadHtml(html);
-
         var results = new List<MetadataCandidate>();
 
-        // Title: #video_title h3 の最初のテキストノード（リンクを除いた部分もあるが innerText で十分）
         var titleNode = doc.DocumentNode.SelectSingleNode("//div[@id='video_title']//h3");
         if (titleNode != null)
         {
@@ -171,11 +145,10 @@ public class JavLibraryMetadataProvider : IMetadataProvider
 
         if (results.Count == 0)
         {
-            _logger.LogWarning("[JavLibrary] Title not found — possible parser error");
+            _logger.LogWarning("[JavLibrary] Title not found — HTML parse mismatch?");
             return results;
         }
 
-        // Cover
         var coverNode = doc.DocumentNode.SelectSingleNode("//img[@id='video_jacket_img']")
                      ?? doc.DocumentNode.SelectSingleNode("//div[@id='video_jacket']//img");
         var coverSrc = coverNode?.GetAttributeValue("src", null);
@@ -185,15 +158,13 @@ public class JavLibraryMetadataProvider : IMetadataProvider
             results.Add(new MetadataCandidate(ProviderId, "Cover", coverUrl, 75, Priority, SourceUrl: url));
         }
 
-        // Info block: #video_info 内の各フィールド
-        AddInfoField(doc, results, "video_date",     "ReleaseDate", url);
-        AddInfoField(doc, results, "video_length",   "Duration",    url, stripSuffix: "分");
-        AddInfoFieldLink(doc, results, "video_maker",   "Maker",  url);
-        AddInfoFieldLink(doc, results, "video_label",   "Label",  url);
-        AddInfoFieldLink(doc, results, "video_director","Director", url);
-        AddInfoFieldLink(doc, results, "video_series",  "Series", url);
+        AddInfoField(doc, results, "video_date",      "ReleaseDate", url);
+        AddInfoField(doc, results, "video_length",    "Duration",    url, stripSuffix: "分");
+        AddInfoFieldLink(doc, results, "video_maker",    "Maker",    url);
+        AddInfoFieldLink(doc, results, "video_label",    "Label",    url);
+        AddInfoFieldLink(doc, results, "video_director", "Director", url);
+        AddInfoFieldLink(doc, results, "video_series",   "Series",   url);
 
-        // Genres
         var genreNodes = doc.DocumentNode.SelectNodes("//div[@id='video_genres']//a");
         if (genreNodes != null)
             foreach (var g in genreNodes)
@@ -203,20 +174,64 @@ public class JavLibraryMetadataProvider : IMetadataProvider
                     results.Add(new MetadataCandidate(ProviderId, "Genre", genre, 75, Priority, SourceUrl: url));
             }
 
-        // Cast
         var castNodes = doc.DocumentNode.SelectNodes("//div[@id='video_cast']//span[contains(@class,'star')]//a");
         if (castNodes != null)
             foreach (var a in castNodes)
             {
                 var actress = System.Net.WebUtility.HtmlDecode(a.InnerText.Trim());
                 if (!string.IsNullOrEmpty(actress))
-                {
                     results.Add(new MetadataCandidate(ProviderId, "Actress", actress, 75, Priority, SourceUrl: url));
-                    _logger.LogInformation("[JavLibrary] Actress={Actress}", actress);
-                }
             }
 
         return results;
+    }
+
+    // キャッシュ確認 → ミスなら rate limit → Playwright fetch → キャッシュ保存
+    private async Task<string?> FetchWithCacheAsync(string url, string waitForSelector, System.Threading.CancellationToken ct)
+    {
+        // キャッシュ確認
+        using (var scope = _scopeFactory.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<WiseDbContext>();
+            var cached = await db.HttpCaches
+                .FirstOrDefaultAsync(c => c.Url == url && c.ExpiresAt > DateTime.UtcNow, ct);
+            if (cached != null)
+            {
+                _logger.LogDebug("[JavLibrary] Cache hit {Url}", url);
+                return cached.Body;
+            }
+        }
+
+        // Playwright fetch (with rate limit)
+        await _rateLimiter.AcquireAsync(JavavLibraryDomain, ct);
+        var html = await _playwright.FetchHtmlAsync(url, waitForSelector, ct);
+        if (html == null) return null;
+
+        // キャッシュ保存
+        using (var scope = _scopeFactory.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<WiseDbContext>();
+            var entry = new HttpCache
+            {
+                Url = url,
+                Body = html,
+                ContentType = "text/html",
+                CachedAt = DateTime.UtcNow,
+                ExpiresAt = DateTime.UtcNow.Add(CacheTtl),
+            };
+            db.HttpCaches.Add(entry);
+            try { await db.SaveChangesAsync(ct); }
+            catch { /* UNIQUE 制約違反は並行 insert — 無視してよい */ }
+        }
+
+        return html;
+    }
+
+    private string NormalizeHref(string href)
+    {
+        if (string.IsNullOrEmpty(href)) return href;
+        if (href.StartsWith("http")) return href;
+        return $"{BaseUrl}/ja/{href.TrimStart('/')}";
     }
 
     private static void AddInfoField(HtmlDocument doc, List<MetadataCandidate> results,
@@ -227,7 +242,8 @@ public class JavLibraryMetadataProvider : IMetadataProvider
         var text = node?.InnerText.Trim();
         if (string.IsNullOrEmpty(text)) return;
         if (stripSuffix != null) text = text.Replace(stripSuffix, "").Trim();
-        results.Add(new MetadataCandidate("JavLibrary", fieldName, System.Net.WebUtility.HtmlDecode(text), 75, 45, SourceUrl: url));
+        results.Add(new MetadataCandidate("JavLibrary", fieldName,
+            System.Net.WebUtility.HtmlDecode(text), 75, 45, SourceUrl: url));
     }
 
     private static void AddInfoFieldLink(HtmlDocument doc, List<MetadataCandidate> results,
@@ -237,21 +253,7 @@ public class JavLibraryMetadataProvider : IMetadataProvider
                 ?? doc.DocumentNode.SelectSingleNode($"//div[@id='{divId}']//*[@class='text']//a");
         var text = node?.InnerText.Trim();
         if (!string.IsNullOrEmpty(text))
-            results.Add(new MetadataCandidate("JavLibrary", fieldName, System.Net.WebUtility.HtmlDecode(text), 75, 45, SourceUrl: url));
+            results.Add(new MetadataCandidate("JavLibrary", fieldName,
+                System.Net.WebUtility.HtmlDecode(text), 75, 45, SourceUrl: url));
     }
-
-    private static HttpRequestMessage BuildRequest(string url)
-    {
-        var req = new HttpRequestMessage(HttpMethod.Get, url);
-        req.Headers.Add("User-Agent",
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
-        req.Headers.Add("Accept-Language", "ja,en;q=0.9");
-        req.Headers.Add("Referer", BaseUrl + "/ja/");
-        return req;
-    }
-
-    private static bool IsCloudflareChallenge(string html) =>
-        html.Contains("cf-browser-verification") ||
-        html.Contains("Just a moment") ||
-        html.Contains("cloudflare") && html.Contains("challenge");
 }

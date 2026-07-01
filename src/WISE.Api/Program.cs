@@ -110,10 +110,9 @@ builder.Services.AddHttpClient<JavBusMetadataProvider>()
     .AddHttpMessageHandler<RateLimitingHandler>()
     .AddPolicyHandler(MetadataRetryPolicy());
 builder.Services.AddScoped<IMetadataProvider>(sp => sp.GetRequiredService<JavBusMetadataProvider>());
-builder.Services.AddHttpClient<JavLibraryMetadataProvider>()
-    .AddHttpMessageHandler<CachingHandler>()
-    .AddHttpMessageHandler<RateLimitingHandler>()
-    .AddPolicyHandler(MetadataRetryPolicy());
+// JavLibrary: HttpClient ではなく Playwright 経由（Cloudflare 対策）
+builder.Services.AddSingleton<PlaywrightBrowserService>();
+builder.Services.AddScoped<JavLibraryMetadataProvider>();
 builder.Services.AddScoped<IMetadataProvider>(sp => sp.GetRequiredService<JavLibraryMetadataProvider>());
 builder.Services.AddScoped<MetadataService>();
 builder.Services.AddScoped<IMetadataConflictResolver, MetadataConflictResolver>();
