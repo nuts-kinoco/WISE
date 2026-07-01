@@ -136,6 +136,8 @@ public class AdultWikiMetadataProvider : IMetadataProvider
             raw = Regex.Split(raw, @"\s*\|\s*")[0].Trim();
 
             // 末尾の説明文を削除: "に出演している女優さん" / "の出演女優は誰?" / "の動画" など
+            // 「!」「。」「」の後の任意のテキストも削除（タイトル本体と説明の区切り）
+            raw = Regex.Replace(raw, @"([!。」])\s*(の出演女優は誰|に出演している|の無料動画|の動画).*$", "$1").Trim();
             raw = Regex.Replace(raw, @"(に出演している女優|に出演している|の出演女優は誰|の無料動画|の動画).*$", "").Trim();
 
             if (!string.IsNullOrWhiteSpace(raw) && raw.Length > 2)
