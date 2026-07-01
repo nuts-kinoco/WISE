@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using System;
 using System.IO;
@@ -18,12 +19,14 @@ namespace WISE.Api.Controllers
         private readonly WiseDbContext _db;
         private readonly ArchiveReaderSelector _selector;
         private readonly ILogger<ReaderController> _logger;
+        private readonly IMemoryCache _cache;
 
-        public ReaderController(WiseDbContext db, ArchiveReaderSelector selector, ILogger<ReaderController> logger)
+        public ReaderController(WiseDbContext db, ArchiveReaderSelector selector, ILogger<ReaderController> logger, IMemoryCache cache)
         {
             _db = db;
             _selector = selector;
             _logger = logger;
+            _cache = cache;
         }
 
         [HttpGet("pages")]
@@ -81,10 +84,19 @@ namespace WISE.Api.Controllers
                 if (pageIndex < 0 || pageIndex >= pages.Count)
                     return NotFound(new { error = $"Page {pageIndex} not found. Total: {pages.Count}" });
 
-                var stream = await reader.OpenPageAsync(archiveAsset.FilePath, pageIndex, HttpContext.RequestAborted);
                 var contentType = pages[pageIndex].ContentType;
+                var cacheKey = $"reader:{workId}:{pageIndex}";
 
-                return File(stream, contentType, enableRangeProcessing: false);
+                if (!_cache.TryGetValue(cacheKey, out byte[]? cachedBytes) || cachedBytes == null)
+                {
+                    var stream = await reader.OpenPageAsync(archiveAsset.FilePath, pageIndex, HttpContext.RequestAborted);
+                    using var ms = new MemoryStream();
+                    await stream.CopyToAsync(ms, HttpContext.RequestAborted);
+                    cachedBytes = ms.ToArray();
+                    _cache.Set(cacheKey, cachedBytes, TimeSpan.FromMinutes(30));
+                }
+
+                return File(cachedBytes, contentType);
             }
             catch (ArgumentOutOfRangeException)
             {

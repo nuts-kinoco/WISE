@@ -101,7 +101,12 @@ public class WatchFolderMonitorService : BackgroundService
     private void OnFileCreatedOrChanged(object sender, FileSystemEventArgs e)
     {
         var ext = Path.GetExtension(e.FullPath).ToLower();
-        var validExtensions = new[] { ".mp4", ".mkv", ".avi", ".zip", ".jpg", ".png" };
+        var validExtensions = new[] {
+            ".mp4", ".mkv", ".avi", ".wmv", ".mov", ".m4v",
+            ".zip", ".cbz", ".rar", ".cbr", ".7z",
+            ".epub", ".pdf",
+            ".jpg", ".jpeg", ".png", ".webp",
+        };
         if (validExtensions.Contains(ext))
         {
             _pendingFiles[e.FullPath] = DateTime.UtcNow;

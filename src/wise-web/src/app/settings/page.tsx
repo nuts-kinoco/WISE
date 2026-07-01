@@ -1,7 +1,7 @@
 "use client";
 
 import { useGalleryStore } from "@/store/useGalleryStore";
-import { ArrowLeft, Monitor, Moon, Sun, Settings2, Globe, Image, Trash2, Cookie, CheckCircle2, AlertCircle } from "lucide-react";
+import { ArrowLeft, Monitor, Moon, Sun, Settings2, Globe, Image, Trash2, Cookie, CheckCircle2, AlertCircle, BookOpen } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { fetchSettings, patchSetting, clearHistory, clearFinishedJobs } from "@/lib/api";
@@ -35,6 +35,24 @@ export default function SettingsPage() {
       const res = await fetch(`${API_BASE_URL}/system/cookies/fc2/status`);
       if (res.ok) setFc2CookieStatus(await res.json());
     } catch { /* ignore */ }
+  };
+
+  // Reader settings state (persisted in localStorage)
+  const [readerCacheMb, setReaderCacheMbState] = useState(1024);
+  const [readerResizeFilter, setReaderResizeFilterState] = useState("bilinear");
+  const [readerImageFilter, setReaderImageFilterState] = useState("none");
+
+  const setReaderCacheMb = (v: number) => {
+    setReaderCacheMbState(v);
+    localStorage.setItem("wise_reader_cache_mb", String(v));
+  };
+  const setReaderResizeFilter = (v: string) => {
+    setReaderResizeFilterState(v);
+    localStorage.setItem("wise_reader_resize_filter", v);
+  };
+  const setReaderImageFilter = (v: string) => {
+    setReaderImageFilterState(v);
+    localStorage.setItem("wise_reader_image_filter", v);
   };
 
   // MGS Cookie state
@@ -98,6 +116,13 @@ export default function SettingsPage() {
     }).catch(() => {});
     loadFc2Status();
     loadMgsStatus();
+    // Load reader settings from localStorage
+    const mb = parseInt(localStorage.getItem("wise_reader_cache_mb") ?? "1024", 10);
+    if (Number.isFinite(mb) && mb > 0) setReaderCacheMbState(mb);
+    const rf = localStorage.getItem("wise_reader_resize_filter");
+    if (rf) setReaderResizeFilterState(rf);
+    const imf = localStorage.getItem("wise_reader_image_filter");
+    if (imf) setReaderImageFilterState(imf);
   }, []);
 
   const handleSaveFc2Cookie = async () => {
@@ -382,6 +407,72 @@ export default function SettingsPage() {
                 保存先: <code className="bg-muted px-1 rounded">{mgsCookieStatus?.cookieTxtPath ?? "%APPDATA%\\WISE\\mgsCookies.txt"}</code>
               </p>
             </div>
+          </section>
+
+          {/* Reader Settings */}
+          <section className="space-y-4 pt-4">
+            <h2 className="text-xl font-semibold border-b pb-2 flex items-center gap-2">
+              <BookOpen className="w-5 h-5" /> リーダー設定
+            </h2>
+            <div className="bg-card border rounded-xl overflow-hidden divide-y divide-border">
+              {/* Cache MB */}
+              <div className="flex items-center justify-between p-4">
+                <div>
+                  <p className="font-medium">キャッシュメモリ</p>
+                  <p className="text-sm text-muted-foreground mt-0.5">先読みページ数の目安（10MB/ページ換算）</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={64}
+                    max={4096}
+                    step={64}
+                    value={readerCacheMb}
+                    onChange={(e) => {
+                      const v = parseInt(e.target.value, 10);
+                      if (Number.isFinite(v) && v >= 64) setReaderCacheMb(v);
+                    }}
+                    className="w-20 rounded-lg border bg-background px-2 py-1 text-sm text-right focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                  <span className="text-sm text-muted-foreground">MB</span>
+                </div>
+              </div>
+              {/* Resize filter */}
+              <div className="flex items-center justify-between p-4">
+                <div>
+                  <p className="font-medium">リサイズフィルター</p>
+                  <p className="text-sm text-muted-foreground mt-0.5">画像拡縮時の補間アルゴリズム</p>
+                </div>
+                <select
+                  value={readerResizeFilter}
+                  onChange={(e) => setReaderResizeFilter(e.target.value)}
+                  className="rounded-lg border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value="bilinear">バイリニア（デフォルト）</option>
+                  <option value="bicubic">バイキュービック</option>
+                  <option value="lanczos">ランチョス</option>
+                </select>
+              </div>
+              {/* Image filter */}
+              <div className="flex items-center justify-between p-4">
+                <div>
+                  <p className="font-medium">画像フィルター</p>
+                  <p className="text-sm text-muted-foreground mt-0.5">ページ表示時の補正効果</p>
+                </div>
+                <select
+                  value={readerImageFilter}
+                  onChange={(e) => setReaderImageFilter(e.target.value)}
+                  className="rounded-lg border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value="none">なし</option>
+                  <option value="soft">ソフト</option>
+                  <option value="soft-sharp">ソフト＋シャープ</option>
+                </select>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              設定はブラウザに保存されます。リーダー内の設定パネルからも変更できます。
+            </p>
           </section>
 
           {/* Language Settings */}

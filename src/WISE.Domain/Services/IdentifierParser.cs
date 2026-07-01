@@ -13,10 +13,10 @@ namespace WISE.Domain.Services;
 /// </summary>
 public static class IdentifierParser
 {
-    // 商業AV汎用: EKDV, FTAV, IPX, SONE, SSIS, PRED など [A-Z]{2,6}-\d{2,}
-    // ホワイトリスト方式は廃止。任意のプレフィックスを許容する。
+    // 商業AV汎用: EKDV, FTAV, IPX, SONE, SSIS, PRED など [A-Z]{2,6}[_-]\d{2,}
+    // ハイフン・アンダースコアの両方を許容し、常にハイフン正規化して返す。
     private static readonly Regex CommercialRegex =
-        new(@"\b([A-Z]{2,6})-(\d{2,})\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        new(@"\b([A-Z]{2,6})[_-](\d{2,})\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     // FC2 / FC2-PPV (例: FC2-PPV-1234567, FC2-1234567)
     private static readonly Regex Fc2Regex =
@@ -112,11 +112,12 @@ public static class IdentifierParser
             return results;
         }
 
-        // 汎用商業AV（ホワイトリストなし）
+        // 汎用商業AV（ホワイトリストなし）。アンダースコアはハイフンに正規化。
         var commercialMatch = CommercialRegex.Match(fileName);
         if (commercialMatch.Success)
         {
-            results.Add(new IdentifierCandidate("CommercialVideoPattern", commercialMatch.Value.ToUpper()));
+            var normalized = $"{commercialMatch.Groups[1].Value.ToUpper()}-{commercialMatch.Groups[2].Value}";
+            results.Add(new IdentifierCandidate("CommercialVideoPattern", normalized));
         }
 
         return results;
