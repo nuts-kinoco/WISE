@@ -2,188 +2,197 @@
 
 ## ミッション
 
-**JavLibrary プロバイダーが実際の品番から title / actress / cover / maker / label / director / genre を正しく取得できることを、スクレイピング結果の実値とともに証拠提出せよ。**
+**JavLibraryプロバイダーが実際の品番からtitle / actress / cover / maker / label / director / genreを正しく取得できることを、スクレイピング結果の実値とともに証拠提出せよ。**
 
 成功基準:
-- N ≥ 20 品番に対してテストを実施
-- 各品番でスクレイピングに成功した場合、取得した全フィールドの実値を報告
-- 成功・失敗・部分取得を分類し、フィールド別取得率（例: Title 95%, Actress 80%）を集計すること
+- N ≥ 20品番でテストを実施
+- 各品番で取得した全フィールドの実値を報告
+- フィールド別取得率（例: Title 95%, Actress 80%）を集計
 
 ---
 
-## セットアップ手順
+## セットアップ
 
-### 1. 依存ツールのインストール
+### 1. Playwright Chromiumインストール（初回のみ）
 
 ```bash
-# Playwright CLI のインストール（初回のみ）
-dotnet tool install -g Microsoft.Playwright.CLI
-
-# Chromium バイナリのインストール（初回のみ）
+# Chromiumバイナリのインストール
+~/.dotnet/tools/playwright install chromium
+# または
 playwright install chromium
 ```
 
-インストール確認:
+確認:
 ```bash
 playwright --version
-ls ~/.cache/ms-playwright/  # Linux/Mac
-# または %LOCALAPPDATA%\ms-playwright\  # Windows
 ```
 
-### 2. JavLibrary プロバイダーを有効化
+### 2. appsettings.json を編集してJavLibraryを有効化
 
-`src/WISE.Api/appsettings.json` の `JavLibrary.IsEnabled` を一時的に `true` に変更:
-
-```json
-"JavLibrary": { "Priority": 45, "IsEnabled": true }
-```
-
-また、`RateLimiter.Domains` に JavLibrary のレート設定を追加:
-
-```json
-"www.javlibrary.com": { "RequestsPerSecond": 0.5, "BurstSize": 2 }
-```
-
-（Cloudflare ブロック回避のため低めに設定。0.5 req/s = 2秒に1リクエスト）
-
-### 3. API サーバー起動
-
-```bash
-cd src/WISE.Api
-dotnet run
-# または dotnet run --urls "http://localhost:5162"
-```
-
----
-
-## テスト対象品番リスト（N=25）
-
-以下の品番を使用すること。有名タイトルを中心に選定しており、JavLibrary に収録されている可能性が高い:
-
-```
-SONE-001   SONE-100   SONE-200
-ABW-001    ABW-100    ABW-200
-MIRD-001   MIRD-100
-SSNI-001   SSNI-500   SSNI-999
-MIDV-001   MIDV-100   MIDV-200
-OFJE-001   OFJE-100   OFJE-200   OFJE-300
-IPX-001    IPX-100    IPX-500
-PRED-001   PRED-100   PRED-200
-DASS-001
-```
-
----
-
-## テスト方法
-
-### 方法A: FetchMetadata API 経由（推奨・最も本番に近い）
-
-#### A-1. ワーク登録 → メタデータ取得
-
-品番ごとに以下の手順を繰り返す:
-
-```bash
-# 1. ワーク登録（ダミーファイルパスで可）
-WORK_ID=$(curl -s -X POST http://localhost:5162/api/works \
-  -H "Content-Type: application/json" \
-  -d '{"filePath": "/tmp/test.mp4", "mediaType": 1}' | jq -r '.id')
-
-echo "WorkId: $WORK_ID"
-
-# 2. メタデータ取得ジョブをキュー
-JOB_ID=$(curl -s -X POST http://localhost:5162/api/works/$WORK_ID/fetch-metadata \
-  | jq -r '.jobId')
-
-echo "JobId: $JOB_ID"
-
-# 3. ジョブ完了を待機（30秒タイムアウト）
-for i in {1..30}; do
-  STATUS=$(curl -s http://localhost:5162/api/jobs/$JOB_ID | jq -r '.status')
-  echo "[$i] Status: $STATUS"
-  [ "$STATUS" = "Completed" ] || [ "$STATUS" = "Failed" ] && break
-  sleep 2
-done
-
-# 4. 取得されたメタデータを確認
-curl -s http://localhost:5162/api/works/$WORK_ID | jq '{
-  title: .title,
-  primaryIdentifier: .primaryIdentifier,
-  metadata: [.metadataFields[] | {field: .fieldName, value: .value, provider: .providerId}]
-}'
-```
-
-**注意**: JavLibrary は他のプロバイダーとの競合で上書きされる場合がある。  
-確認は `metadataFields` の `providerId == "JavLibrary"` のフィールドを対象にすること。
-
-#### A-2. JavLibrary 単体テスト用スクリプト
-
-他プロバイダーを無効化した appsettings を使うか、以下の方法で JavLibrary の結果を直接観察する。
-
-`appsettings.Development.json` を作成:
+`src/WISE.Api/appsettings.json` を以下のように変更:
 
 ```json
 {
   "MetadataProviders": {
-    "Fanza":      { "IsEnabled": false },
-    "Mgs":        { "IsEnabled": false },
-    "Fc2":        { "IsEnabled": false },
-    "DLSite":     { "IsEnabled": false },
-    "JavBus":     { "IsEnabled": false },
-    "AvWiki":     { "IsEnabled": false },
+    "Fanza":      { "Priority": 80, "IsEnabled": false },
+    "Mgs":        { "Priority": 70, "IsEnabled": false },
+    "Fc2":        { "Priority": 60, "IsEnabled": false },
+    "LocalNfo":   { "Priority": 90, "IsEnabled": false },
+    "JavBus":     { "Priority": 40, "IsEnabled": false },
     "JavLibrary": { "Priority": 45, "IsEnabled": true }
+  },
+  "RateLimiter": {
+    "DefaultRequestsPerSecond": 2.0,
+    "DefaultBurstSize": 5,
+    "Domains": {
+      "www.javlibrary.com": { "RequestsPerSecond": 0.5, "BurstSize": 2 }
+    }
   }
 }
 ```
 
-これで FetchMetadata 結果が JavLibrary 単体からの取得になる。
+JavLibrary**以外のプロバイダーをすべて無効**にすること（結果をJavLibrary単体で観察するため）。
 
-### 方法B: 直接スクレイピング確認スクリプト（補助）
+### 3. テスト用ダミーファイルを作成
 
-C# スクリプトとして以下を `TestJavLibrary.cs` に作成して実行:
+以下の品番でダミー.mp4ファイルを作成する:
 
-```csharp
-// dotnet script TestJavLibrary.cs — または xunit テストとして実装
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.DependencyInjection;
-using WISE.Infrastructure.Http;
+```bash
+mkdir -p /tmp/javlib_test
+for ID in SONE-001 SONE-100 SONE-200 ABW-001 ABW-100 ABW-200 \
+           MIRD-001 MIRD-100 SSNI-001 SSNI-500 SSNI-999 \
+           MIDV-001 MIDV-100 MIDV-200 OFJE-001 OFJE-100 \
+           OFJE-200 OFJE-300 IPX-001 IPX-100 IPX-500 \
+           PRED-001 PRED-100 PRED-200 DASS-001; do
+  touch "/tmp/javlib_test/${ID}.mp4"
+done
+ls /tmp/javlib_test/ | wc -l  # 25であること
+```
 
-var services = new ServiceCollection()
-    .AddLogging(b => b.AddConsole().SetMinimumLevel(LogLevel.Debug))
-    .AddSingleton<PlaywrightBrowserService>()
-    .BuildServiceProvider();
+### 4. APIサーバー起動
 
-var playwright = services.GetRequiredService<PlaywrightBrowserService>();
+```bash
+cd src/WISE.Api
+dotnet run
+```
 
-var identifiers = new[] {
-    "SONE-001", "ABW-001", "SSNI-001", "MIDV-001", "OFJE-001",
-    "IPX-001", "PRED-001", "DASS-001", "MIRD-001", "SONE-100"
-};
+起動ログに `[Playwright] Chromium 起動完了` が出ることを確認（最初のFetchMetadata実行後に出る）。
 
-foreach (var id in identifiers)
-{
-    var url = $"https://www.javlibrary.com/ja/vl_searchbyid.php?keyword={id}";
-    var html = await playwright.FetchHtmlAsync(url, "#video_title, div.video",
-        CancellationToken.None);
-    
-    Console.WriteLine($"\n=== {id} ===");
-    Console.WriteLine($"HTML取得: {(html != null ? $"OK ({html.Length} chars)" : "FAIL")}");
-    
-    if (html != null)
-    {
-        // タイトル確認
-        var titleMatch = System.Text.RegularExpressions.Regex.Match(
-            html, @"<h3[^>]*>(.*?)</h3>");
-        Console.WriteLine($"Title: {titleMatch.Groups[1].Value}");
-        
-        // CF通過確認
-        var isCF = html.Contains("Just a moment") || html.Contains("cf-browser-verification");
-        Console.WriteLine($"Cloudflare blocked: {isCF}");
-    }
-    
-    await Task.Delay(3000); // 礼儀正しいクロール
-}
+---
 
-await playwright.DisposeAsync();
+## テスト手順
+
+### Step 1: ダミーファイルをImport
+
+```bash
+curl -s -X POST http://localhost:5162/api/jobs/import \
+  -H "Content-Type: application/json" \
+  -d '{"JobType": "Import", "Payload": {"directoryPath": "/tmp/javlib_test", "mediaType": 1}}' \
+  | jq '{jobId: .jobId}'
+```
+
+Importジョブの完了を待つ:
+
+```bash
+JOB_ID="<上で返ったjobId>"
+for i in $(seq 1 30); do
+  STATUS=$(curl -s http://localhost:5162/api/jobs/$JOB_ID | jq -r '.status')
+  echo "[$i] $STATUS"
+  [ "$STATUS" = "Completed" ] || [ "$STATUS" = "Failed" ] && break
+  sleep 2
+done
+```
+
+### Step 2: WorkのIDをAPIから取得（**sqlite3から取得しないこと**）
+
+```bash
+# APIのレスポンスからIDを取得する
+curl -s "http://localhost:5162/api/works?pageSize=100" | jq '{
+  total: .totalCount,
+  sample: [.items[:3][] | {id: .id, identifier: .primaryIdentifier}]
+}'
+```
+
+`total` が25以上であることを確認。0の場合はImportが別DBに書いた可能性がある（後述のトラブルシュート参照）。
+
+### Step 3: 全WorkにFetchMetadataを一括キュー登録
+
+```bash
+# APIレスポンスからIDを配列として取得してバッチキュー
+WORK_IDS=$(curl -s "http://localhost:5162/api/works?pageSize=100" | jq '[.items[].id]')
+echo "対象件数: $(echo $WORK_IDS | jq length)"
+
+curl -s -X POST http://localhost:5162/api/jobs/fetchmetadata/batch \
+  -H "Content-Type: application/json" \
+  -d "{\"workIds\": $WORK_IDS}" \
+  | jq '{queued: .queued}'
+```
+
+### Step 4: 完了を待機
+
+```bash
+# FetchMetadataジョブの進捗を監視
+watch -n 5 'curl -s http://localhost:5162/api/jobs | jq '"'"'
+  [.[] | select(.jobType=="FetchMetadata")] |
+  {
+    total: length,
+    queued: [.[] | select(.status=="Queued")] | length,
+    running: [.[] | select(.status=="Running")] | length,
+    completed: [.[] | select(.status=="Completed")] | length,
+    failed: [.[] | select(.status=="Failed")] | length
+  }'"'"
+```
+
+全件Completed/Failedになったら次に進む。
+
+### Step 5: 結果収集
+
+```bash
+# 全workの取得結果をまとめて出力
+curl -s "http://localhost:5162/api/works?pageSize=100" | jq -r '
+  .items[] | 
+  "=== \(.primaryIdentifier // "(no id)") ===\n" +
+  "  Title  : \(.title // "(none)")\n" +
+  "  Actress: \(.actress // "(none)")\n" +
+  "  Maker  : \(.maker // "(none)")\n" +
+  "  Cover  : \(.coverUrl // "(none)")\n"
+'
+```
+
+特定workの全フィールドをプロバイダー別に確認（抽出された品番のひとつで実行）:
+
+```bash
+WORK_ID=$(curl -s "http://localhost:5162/api/works?pageSize=1" | jq -r '.items[0].id')
+curl -s "http://localhost:5162/api/works/$WORK_ID" | jq '
+  .metadata |
+  group_by(.providerId) |
+  map({
+    provider: .[0].providerId,
+    fields: map("\(.fieldName): \(.value)") 
+  })
+'
+```
+
+### Step 6: HttpCachesテーブルでキャッシュ動作を確認
+
+APIが使用しているDBのパスを確認:
+
+```bash
+# Linux/Mac
+ls -la ~/.config/WISE/wise.db
+
+# Windows (PowerShell)
+ls "$env:APPDATA\WISE\wise.db"
+```
+
+JavLibraryのキャッシュ行数を確認:
+
+```bash
+# Linux/Mac
+sqlite3 ~/.config/WISE/wise.db "SELECT count(*), min(cached_at), max(cached_at) FROM HttpCaches WHERE url LIKE '%javlibrary%';"
+
+# 同URLを2回FetchMetadataした場合（同じworkを再度キュー登録して実行）、
+# 2回目の応答が著しく速ければキャッシュヒット（Playwright未起動のまま応答）
 ```
 
 ---
@@ -195,108 +204,102 @@ await playwright.DisposeAsync();
 | 項目 | 結果 |
 |------|------|
 | playwright install chromium 成功 | ✅/❌ |
-| Chromium バージョン | |
-| API サーバー起動成功 | ✅/❌ |
-| JavLibrary IsEnabled=true 確認 | ✅/❌ |
+| Chromiumバージョン | |
+| APIサーバー起動成功 | ✅/❌ |
+| Importジョブ完了（Work件数） | 件 |
+| `GET /api/works` で全Work確認 | ✅/❌ |
+| JavLibrary IsEnabled=true | ✅/❌ |
+| 他プロバイダー全IsEnabled=false | ✅/❌ |
 
-### 2. 品番別スクレイピング結果（全N件）
-
-各品番について以下を報告:
+### 2. 品番別スクレイピング結果（全25件）
 
 ```
 品番: SONE-001
+WorkId: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 取得結果: 成功 / 失敗 / 部分取得
 
-  Title    : [実際に取得した値]
-  Cover URL: [https://...]
-  Actress  : [取得した女優名（複数の場合は列挙）]
-  Maker    : [取得値]
-  Label    : [取得値]
-  Director : [取得値]
-  Genre    : [取得したジャンル（複数の場合は列挙）]
+  Title      : [実際に取得した値]
+  Cover URL  : [https://... または /api/works/.../cover]
+  Actress    : [取得した女優名（複数あれば列挙）]
+  Maker      : [取得値]
+  Label      : [取得値]
+  Director   : [取得値]
+  Genre      : [取得したジャンル（複数あれば列挙）]
   ReleaseDate: [取得値]
-  Duration : [取得値]
+  Duration   : [取得値]
 
-  ソースURL: https://www.javlibrary.com/ja/?v=XXX
+  SourceUrl: https://www.javlibrary.com/ja/?v=XXX
   経過時間 : X.Xs
-  備考     : （Cloudflareに遮られた等、問題があれば記載）
+  備考     : （Cloudflare遮断、検索0件等があれば記載）
 ```
 
 ### 3. フィールド別取得率
 
-| フィールド | 取得成功数 / 試行数 | 取得率 |
-|------------|---------------------|--------|
-| Title | / 25 | % |
-| Cover | / 25 | % |
-| Actress | / 25 | % |
-| Maker | / 25 | % |
-| Label | / 25 | % |
-| Director | / 25 | % |
-| Genre | / 25 | % |
-| ReleaseDate | / 25 | % |
-| Duration | / 25 | % |
+| フィールド | 取得成功数 / 25 | 取得率 |
+|------------|-----------------|--------|
+| Title | | % |
+| Cover | | % |
+| Actress | | % |
+| Maker | | % |
+| Label | | % |
+| Director | | % |
+| Genre | | % |
+| ReleaseDate | | % |
+| Duration | | % |
 
-### 4. Cloudflare / キャッシュ動作確認
+### 4. Cloudflare・キャッシュ動作
 
-- 初回リクエスト: Cloudflare チャレンジに遮られたか？
-- 同一URLを2回リクエストした場合、キャッシュ（HttpCaches テーブル）から返ったか？
-  - 2回目の応答時間が著しく短ければキャッシュヒット
-- `HttpCaches` テーブルに行が増えているか？  
-  ```sql
-  SELECT url, length(body), cached_at, expires_at FROM HttpCaches WHERE url LIKE '%javlibrary%' LIMIT 10;
-  ```
+- Cloudflare突破率: X / 25件
+- Cloudflareに遮断された品番: [一覧]
+- HttpCachesテーブルの行数（javlibrary行のみ）: X行
+- 同URLの2回目リクエストがキャッシュから返ったか: ✅/❌
 
-### 5. レートリミッター動作確認
+### 5. 特に報告してほしい点
 
-- 連続リクエスト時に適切なウェイトが入っているか（ログで `[RateLimiter]` 系のログが出ているか確認）
-- 429 などでブロックされた場合、Polly retry が効いているか
-
-### 6. 問題点・懸念事項
-
-以下の点について特に報告すること:
-
-1. **Cloudflare 突破率**: 全リクエストのうち何%が通過できたか
-2. **検索ヒット精度**: 検索結果が別品番になっていないか（品番完全一致チェック）  
-   例: `SONE-001` で検索して `SONE-0001` や `SON-001` が返ってきていないか
-3. **複数ヒット時の選択**: 検索結果が複数ある場合、先頭を選んでいるが正しいか
-4. **HTML パース精度**: タイトルに余分な文字列（ `ID:` プレフィックス等）が含まれていないか
-5. **Playwright メモリリーク**: 20件処理後もブラウザプロセスが正常に動作しているか
-6. **並行実行**: 複数の FetchMetadata ジョブを同時にキューした場合（5件同時）、SemaphoreSlim が正しく機能してクラッシュしないか
+1. **Cloudflare突破率**: 全リクエストのうち何%が通過できたか
+2. **waitForSelectorの動作**: `"#video_title, div.video"` のOR構文が意図通り機能しているか  
+   （APIログの `[Playwright] セレクタ ... がタイムアウト` の有無で確認）
+3. **品番マッチ精度**: 検索結果が別の品番になっていないか  
+   例: `SONE-001`で検索して`SONE-0001`や関係ない品番が返っていないか
+4. **20件連続処理後のブラウザ状態**: プロセスがクラッシュ・リークしていないか  
+   （全件完了後も追加でFetchMetadata 5件をキューできるか確認）
+5. **FetchMetadata失敗時の挙動**: JavLibraryが`null`を返したとき、ジョブが`Failed`か`Completed（0件）`か
 
 ---
 
-## 追加検証: プロバイダー優先度チェーン
+## トラブルシュート
 
-実運用イメージ（公式 → JavLibrary → 動画系スクレイパー）を確認するため:
+### `GET /api/works` が0件を返す
 
-1. FANZA に存在する品番（例: `SONE-001`）を FetchMetadata した場合、FANZA の結果が JavLibrary を上書きするか確認
-2. FANZA に存在しない品番（FC2 系など）に対して JavLibrary がフォールバックとして機能するか確認
-3. `MetadataConflictResolver` がどのプロバイダーの値を採用したかを `metadataFields[].providerId` で確認
-
----
-
-## ログ確認コマンド
+APIが参照するDBは`%APPDATA%\WISE\wise.db`（Windows）または`~/.config/WISE/wise.db`（Linux）。  
+sqlite3で確認するときは**同じファイル**を指定すること:
 
 ```bash
-# API ログで JavLibrary の動作を追う
-# [Playwright] ログ: ブラウザ操作
-# [JavLibrary] ログ: フェッチ・パース結果
-# [RateLimiter] ログ: 待機時間
-dotnet run 2>&1 | grep -E "\[Playwright\]|\[JavLibrary\]|\[RateLimiter\]"
+sqlite3 ~/.config/WISE/wise.db "SELECT count(*) FROM Works;"
 ```
 
----
+Importが別DBに書いた場合: APIを再起動せず、同じAPIプロセスに対して再度Importを実行する。
 
-## 合格基準
+### `{"error": "Work {id} not found."}` が返る
 
-- **必須**: N=20以上の品番でテスト実施、Cloudflare 突破率 ≥ 80%
-- **必須**: Title の取得率 ≥ 70%（タイトルが取れなければ他フィールドも無意味）
-- **必須**: Actress の取得率 ≥ 50%（主目的フィールド）
-- **必須**: 同一URL の2回目リクエストがキャッシュから返ること（経過時間で判断）
-- **任意**: Cover URL が実際に画像として返ること（curl で確認）
+WorkIDを`sqlite3`から取得して貼り付けている場合、フォーマットが一致しないことがある。  
+**必ず`GET /api/works`のレスポンスのJSONから`.id`を取得すること。**
 
-**特に不安な点・FBが欲しい点**:
-- `waitForSelector: "#video_title, div.video"` の OR 構文が Playwright 1.61.0 で正しく動作するか
-- `FetchHtmlAsync` が null を返すケースで JavLibrary 全体がクラッシュせず `MetadataResult.Failed` を正しく返すか
-- `PlaywrightBrowserService` が ASP.NET Core DI から Singleton として正しく Dispose されるか（`IAsyncDisposable` hook）
-- 20件連続処理でブラウザプロセスがリークまたはクラッシュしないか
+### `[Playwright] ブラウザ起動に失敗` がログに出る
+
+```bash
+playwright install chromium
+```
+
+を再実行し、APIを再起動する。
+
+### FetchMetadataジョブが`Failed`になる
+
+```bash
+curl -s http://localhost:5162/api/jobs | jq '
+  [.[] | select(.jobType=="FetchMetadata" and .status=="Failed")] |
+  .[0] | {id: .id, result: .result}
+'
+```
+
+`result`フィールドにエラー詳細が入っている。
