@@ -245,7 +245,8 @@ export default function WorkDetailPage({ params }: { params: Promise<{ id: strin
   const label = getMeta("Label");
   const releaseDate = getMeta("ReleaseDate");
   const runtime = getMeta("Runtime");
-  const authors = [...new Set([...getMetaAll("Author"), ...getMetaAll("author")])].filter(Boolean);
+  const rawAuthors = [...getMetaAll("Author"), ...getMetaAll("author")].filter(Boolean);
+  const authors = Array.from(new Map(rawAuthors.map(a => [a.toLowerCase(), a])).values());
   const circle = getMeta("Circle") ?? getMeta("circle");
   // Genres are stored as |-joined string (to avoid multi-value dedup in backend)
   const genres = getMetaAll("Genre").flatMap(g => g.split("|").map(s => s.trim()).filter(Boolean))

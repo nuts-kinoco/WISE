@@ -36,10 +36,12 @@ internal static class WorkItemMapper
             MediaType       = w.MediaType.ToString(),
             Title           = MetaFirst("Title"),
             // 1名: Actress、複数: ActressTag（Actress は空文字マーカー）
-            Actress         = w.MetadataFields
-                                .Where(m => m.FieldName == "ActressTag")
+            Actress         = (w.MetadataFields.Any(m => m.FieldName == "ActressTag" && m.IsPrimary)
+                                ? w.MetadataFields.Where(m => m.FieldName == "ActressTag" && m.IsPrimary)
+                                : w.MetadataFields.Where(m => m.FieldName == "ActressTag"))
                                 .Select(m => m.Value)
                                 .Where(v => !string.IsNullOrWhiteSpace(v))
+                                .Distinct()
                                 .ToList() is { Count: > 0 } tags
                                     ? string.Join(" / ", tags)
                                     : MetaFirst("Actress", "actress"),
