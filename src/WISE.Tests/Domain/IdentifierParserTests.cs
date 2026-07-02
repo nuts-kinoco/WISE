@@ -118,8 +118,10 @@ public class IdentifierParserTests
     public async Task PathEvidenceProvider_ShouldExtract_RJFromFolderName()
     {
         var provider = new WISE.Domain.Providers.PathEvidenceProvider();
+        // Use Path.DirectorySeparatorChar to be cross-platform
+        var path = $"C:{System.IO.Path.DirectorySeparatorChar}doujin{System.IO.Path.DirectorySeparatorChar}RJ123456 作品タイトル{System.IO.Path.DirectorySeparatorChar}RJ123456.cbz";
         var asset = new WISE.Domain.Entities.Asset(
-            @"C:\doujin\RJ123456 作品タイトル\RJ123456.cbz",
+            path,
             "RJ123456.cbz", 1024L);
 
         var evidences = (await provider.CollectEvidencesAsync(asset)).ToList();
@@ -132,8 +134,9 @@ public class IdentifierParserTests
     public async Task PathEvidenceProvider_ShouldReturnEmpty_ForUnknownFolderName()
     {
         var provider = new WISE.Domain.Providers.PathEvidenceProvider();
+        var path = $"C:{System.IO.Path.DirectorySeparatorChar}doujin{System.IO.Path.DirectorySeparatorChar}Some Random Folder{System.IO.Path.DirectorySeparatorChar}file.cbz";
         var asset = new WISE.Domain.Entities.Asset(
-            @"C:\doujin\Some Random Folder\file.cbz",
+            path,
             "file.cbz", 1024L);
 
         var evidences = (await provider.CollectEvidencesAsync(asset)).ToList();
