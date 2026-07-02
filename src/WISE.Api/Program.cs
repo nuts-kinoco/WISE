@@ -181,6 +181,10 @@ builder.Services.AddScoped<WISE.Application.Queries.ICollectionsQueryService, WI
 builder.Services.AddScoped<WISE.Api.UseCases.CollectionUseCase>();
 builder.Services.AddScoped<WISE.Application.Queries.IReaderQueryService, WISE.Infrastructure.Data.Queries.ReaderQueryService>();
 builder.Services.AddScoped<WISE.Application.Queries.IAssetsQueryService, WISE.Infrastructure.Data.Queries.AssetsQueryService>();
+builder.Services.AddScoped<WISE.Application.Queries.IJobsQueryService, WISE.Infrastructure.Data.Queries.JobsQueryService>();
+builder.Services.AddScoped<WISE.Api.UseCases.JobUseCase>();
+builder.Services.AddScoped<WISE.Application.Queries.IDuplicatesQueryService, WISE.Infrastructure.Data.Queries.DuplicatesQueryService>();
+builder.Services.AddScoped<WISE.Api.UseCases.DuplicateResolveUseCase>();
 
 // Archive readers
 builder.Services.AddScoped<IArchiveReader, ZipArchiveReader>();
