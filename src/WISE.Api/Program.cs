@@ -185,6 +185,11 @@ builder.Services.AddScoped<WISE.Application.Queries.IJobsQueryService, WISE.Infr
 builder.Services.AddScoped<WISE.Api.UseCases.JobUseCase>();
 builder.Services.AddScoped<WISE.Application.Queries.IDuplicatesQueryService, WISE.Infrastructure.Data.Queries.DuplicatesQueryService>();
 builder.Services.AddScoped<WISE.Api.UseCases.DuplicateResolveUseCase>();
+builder.Services.AddScoped<WISE.Application.Queries.IWorksQueryService, WISE.Infrastructure.Data.Queries.WorksQueryService>();
+builder.Services.AddScoped<WISE.Api.UseCases.WorkUserDataUseCase>();
+builder.Services.AddScoped<WISE.Api.UseCases.WorkMetadataUseCase>();
+builder.Services.AddScoped<WISE.Api.UseCases.WorkCoverUseCase>();
+builder.Services.AddScoped<WISE.Api.UseCases.WorkFileUseCase>();
 
 // Archive readers
 builder.Services.AddScoped<IArchiveReader, ZipArchiveReader>();

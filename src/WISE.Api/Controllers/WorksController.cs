@@ -1,16 +1,13 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Http;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
-using System.Text.Json;
-using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
+using WISE.Api.UseCases;
+using WISE.Application.Queries;
 using WISE.Domain.Interfaces;
-using WISE.Infrastructure.Data;
 
 namespace WISE.Api.Controllers
 {
@@ -18,16 +15,28 @@ namespace WISE.Api.Controllers
     [Route("api/[controller]")]
     public class WorksController : ControllerBase
     {
-        private readonly WiseDbContext _dbContext;
-        private readonly ILogger<WorksController> _logger;
+        private readonly IWorksQueryService _query;
+        private readonly WorkUserDataUseCase _userDataUseCase;
+        private readonly WorkMetadataUseCase _metadataUseCase;
+        private readonly WorkCoverUseCase _coverUseCase;
+        private readonly WorkFileUseCase _fileUseCase;
         private readonly ICoverProviderChain _coverChain;
         private readonly IEnumerable<IMediaViewer> _viewers;
 
-        public WorksController(WiseDbContext dbContext, ILogger<WorksController> logger,
-            ICoverProviderChain coverChain, IEnumerable<IMediaViewer> viewers)
+        public WorksController(
+            IWorksQueryService query,
+            WorkUserDataUseCase userDataUseCase,
+            WorkMetadataUseCase metadataUseCase,
+            WorkCoverUseCase coverUseCase,
+            WorkFileUseCase fileUseCase,
+            ICoverProviderChain coverChain,
+            IEnumerable<IMediaViewer> viewers)
         {
-            _dbContext = dbContext;
-            _logger = logger;
+            _query = query;
+            _userDataUseCase = userDataUseCase;
+            _metadataUseCase = metadataUseCase;
+            _coverUseCase = coverUseCase;
+            _fileUseCase = fileUseCase;
             _coverChain = coverChain;
             _viewers = viewers;
         }
@@ -39,76 +48,10 @@ namespace WISE.Api.Controllers
             [FromQuery] string? q = null,
             [FromQuery] string? status = null,
             [FromQuery] string? mediaType = null,
-            [FromQuery] string? sort = null)
+            [FromQuery] string? sort = null,
+            CancellationToken ct = default)
         {
-            page = Math.Max(1, page);
-            pageSize = Math.Clamp(pageSize, 1, 100);
-
-            var query = _dbContext.Works
-                .AsNoTracking()
-                .Include(w => w.MetadataFields)
-                .Include(w => w.Assets)
-                .AsQueryable();
-
-            if (!string.IsNullOrWhiteSpace(status))
-            {
-                var statuses = status.Split(',')
-                    .Select(s => Enum.TryParse<WISE.Domain.Enums.ProcessingStatus>(s.Trim(), true, out var ps) ? ps : (WISE.Domain.Enums.ProcessingStatus?)null)
-                    .Where(ps => ps.HasValue)
-                    .Select(ps => ps!.Value)
-                    .ToList();
-                if (statuses.Count > 0)
-                    query = query.Where(w => statuses.Contains(w.Status));
-            }
-
-            if (!string.IsNullOrWhiteSpace(mediaType))
-            {
-                var types = mediaType.Split(',')
-                    .Select(t => Enum.TryParse<WISE.Domain.Enums.MediaType>(t.Trim(), true, out var mt) ? mt : (WISE.Domain.Enums.MediaType?)null)
-                    .Where(mt => mt.HasValue)
-                    .Select(mt => mt!.Value)
-                    .ToList();
-                if (types.Count > 0)
-                    query = query.Where(w => types.Contains(w.MediaType));
-            }
-
-            if (!string.IsNullOrWhiteSpace(q))
-            {
-                var lowerQ = q.ToLower();
-                query = query.Where(w =>
-                    (w.PrimaryIdentifier != null && w.PrimaryIdentifier.ToLower().Contains(lowerQ)) ||
-                    w.MetadataFields.Any(m => m.FieldName == "Title"      && m.Value != null && m.Value.ToLower().Contains(lowerQ)) ||
-                    w.MetadataFields.Any(m => m.FieldName == "Maker"      && m.Value != null && m.Value.ToLower().Contains(lowerQ)) ||
-                    w.MetadataFields.Any(m => m.FieldName == "Actress"    && m.Value != null && m.Value.ToLower().Contains(lowerQ)) ||
-                    w.MetadataFields.Any(m => m.FieldName == "ActressTag" && m.Value != null && m.Value.ToLower().Contains(lowerQ)) ||
-                    w.MetadataFields.Any(m => m.FieldName == "Label"      && m.Value != null && m.Value.ToLower().Contains(lowerQ)) ||
-                    w.MetadataFields.Any(m => m.FieldName == "Genre"      && m.Value != null && m.Value.ToLower().Contains(lowerQ)) ||
-                    w.MetadataFields.Any(m => m.FieldName == "Tag"        && m.Value != null && m.Value.ToLower().Contains(lowerQ))
-                );
-            }
-
-            var totalCount = await query.CountAsync();
-
-            IQueryable<WISE.Domain.Entities.Work> sorted = (sort ?? "added") switch
-            {
-                "rating"     => query.OrderByDescending(w => w.Rating == null ? -1 : (double)w.Rating)
-                                     .ThenByDescending(w => w.CreatedAt),
-                "title"      => query.OrderBy(w =>
-                                     w.MetadataFields.Where(m => m.FieldName == "Title" && m.IsPrimary).Select(m => m.Value).FirstOrDefault()
-                                     ?? w.MetadataFields.Where(m => m.FieldName == "Title").Select(m => m.Value).FirstOrDefault()),
-                "identifier" => query.OrderBy(w => w.PrimaryIdentifier),
-                "release"    => query.OrderByDescending(w =>
-                                     w.MetadataFields.Where(m => m.FieldName == "ReleaseDate" && m.IsPrimary).Select(m => m.Value).FirstOrDefault()
-                                     ?? w.MetadataFields.Where(m => m.FieldName == "ReleaseDate" || m.FieldName == "release_date").Select(m => m.Value).FirstOrDefault())
-                                     .ThenByDescending(w => w.CreatedAt),
-                "random"     => query.OrderBy(_ => EF.Functions.Random()),
-                _            => query.OrderByDescending(w => w.CreatedAt), // "added" default
-            };
-
-            var rawWorks = await sorted
-                .Skip((page - 1) * pageSize)
-                .Take(pageSize)
-                .ToListAsync();
+            var (rawWorks, totalCount) = await _query.GetListAsync(page, pageSize, q, status, mediaType, sort, ct);
 
             // WorkItemMapper.Map と同一のロジックを使用する（ActressTag 優先処理を含む）。
             // 以前この一覧エンドポイントは独自の簡易マッピングを持っており、複数女優作品の
@@ -118,8 +61,8 @@ namespace WISE.Api.Controllers
             return Ok(new
             {
                 TotalCount = totalCount,
-                Page = page,
-                PageSize = pageSize,
+                Page = Math.Max(1, page),
+                PageSize = Math.Clamp(pageSize, 1, 100),
                 Items = works
             });
         }
@@ -128,66 +71,15 @@ namespace WISE.Api.Controllers
             => WorkItemMapper.ResolveMediaUrl(value, assets);
 
         [HttpGet("{id}")]
-        public async Task<IActionResult> GetWorkDetail(string id)
+        public async Task<IActionResult> GetWorkDetail(string id, CancellationToken ct)
         {
-            if (!System.Guid.TryParse(id, out var workId))
-            {
+            if (!Guid.TryParse(id, out var workId))
                 return BadRequest("Invalid Work ID format.");
-            }
 
-            var work = await _dbContext.Works
-                .AsNoTracking()
-                .Include(w => w.MetadataFields)
-                .Include(w => w.Assets)
-                .FirstOrDefaultAsync(w => w.Id == workId);
+            var detail = await _query.GetDetailAsync(workId, ct);
+            if (detail == null) return NotFound();
 
-            if (work == null)
-            {
-                return NotFound();
-            }
-
-            var history = await _dbContext.EventLogs
-                .Where(e => e.TargetId == workId)
-                .OrderByDescending(e => e.OccurredAt)
-                .Select(e => new { e.EventType, e.OccurredAt, e.Actor, e.Payload })
-                .ToListAsync();
-
-            var createEvent = history.FirstOrDefault(e => e.EventType == "Work Created");
-            object? diagnostic = null;
-            if (createEvent != null && !string.IsNullOrEmpty(createEvent.Payload))
-            {
-                try { diagnostic = System.Text.Json.JsonSerializer.Deserialize<object>(createEvent.Payload); } catch {}
-            }
-
-            // Try to read userMemo and sampleImages from metadata.json
-            string? userMemo = null;
-            List<string> sampleImages = new();
-            var videoAsset = work.Assets.FirstOrDefault(a =>
-                a.FilePath != null && (a.FilePath.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase)
-                                    || a.FilePath.EndsWith(".mkv", StringComparison.OrdinalIgnoreCase)));
-            if (videoAsset?.FilePath != null)
-            {
-                var metaJsonPath = Path.Combine(Path.GetDirectoryName(videoAsset.FilePath)!, "metadata.json");
-                if (System.IO.File.Exists(metaJsonPath))
-                {
-                    try
-                    {
-                        using var doc = JsonDocument.Parse(await System.IO.File.ReadAllTextAsync(metaJsonPath));
-                        if (doc.RootElement.TryGetProperty("userMemo", out var memoEl))
-                            userMemo = memoEl.GetString();
-                        if (doc.RootElement.TryGetProperty("sampleImages", out var samplesEl)
-                            && samplesEl.ValueKind == JsonValueKind.Array)
-                        {
-                            sampleImages = samplesEl.EnumerateArray()
-                                .Select(e => e.GetString())
-                                .Where(s => s != null)
-                                .Select(s => s!)
-                                .ToList();
-                        }
-                    }
-                    catch { }
-                }
-            }
+            var work = detail.Work;
 
             string? MetaFirstDetail(params string[] names)
             {
@@ -206,8 +98,8 @@ namespace WISE.Api.Controllers
                 work.PrimaryIdentifier,
                 work.Favorite,
                 work.Rating,
-                UserMemo = userMemo,
-                SampleImages = sampleImages,
+                UserMemo = detail.UserMemo,
+                SampleImages = detail.SampleImages,
                 CoverUrl = ResolveMediaUrl(
                     MetaFirstDetail("PortraitCover", "Cover") ?? $"/api/works/{work.Id}/cover",
                     work.Assets),
@@ -216,59 +108,20 @@ namespace WISE.Api.Controllers
                     work.Assets),
                 Metadata = work.MetadataFields.Select(m => new { m.FieldName, m.Value, m.IsPrimary, m.ProviderId, m.ConfidenceScore }),
                 Assets = work.Assets.Select(a => new { a.Id, a.OriginalFilename, a.FileSize, a.Sha256, AssetType = a.AssetType.ToString() }),
-                History = history,
-                Diagnostic = diagnostic
+                History = detail.History,
+                Diagnostic = detail.Diagnostic
             });
         }
 
         public record UserDataDto(bool Favorite, int? Rating, string? Memo);
 
         [HttpPatch("{id}/user-data")]
-        public async Task<IActionResult> PatchUserData(string id, [FromBody] UserDataDto dto)
+        public async Task<IActionResult> PatchUserData(string id, [FromBody] UserDataDto dto, CancellationToken ct)
         {
             if (!Guid.TryParse(id, out var workId)) return BadRequest("Invalid Work ID format.");
 
-            var work = await _dbContext.Works
-                .Include(w => w.Assets)
-                .FirstOrDefaultAsync(w => w.Id == workId);
-            if (work == null) return NotFound();
-
-            work.SetFavorite(dto.Favorite);
-            work.SetRating(dto.Rating);
-            await _dbContext.SaveChangesAsync();
-
-            // Update metadata.json userFavorite/userRating/userMemo
-            var videoAsset = work.Assets.FirstOrDefault(a =>
-                a.FilePath != null && (a.FilePath.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase)
-                                    || a.FilePath.EndsWith(".mkv", StringComparison.OrdinalIgnoreCase)));
-            if (videoAsset?.FilePath != null)
-            {
-                var workDir = Path.GetDirectoryName(videoAsset.FilePath)!;
-                var metaJsonPath = Path.Combine(workDir, "metadata.json");
-                try
-                {
-                    Dictionary<string, object?> meta;
-                    if (System.IO.File.Exists(metaJsonPath))
-                    {
-                        var raw = await System.IO.File.ReadAllTextAsync(metaJsonPath);
-                        meta = JsonSerializer.Deserialize<Dictionary<string, object?>>(raw)
-                               ?? new Dictionary<string, object?>();
-                    }
-                    else
-                    {
-                        meta = new Dictionary<string, object?>();
-                    }
-                    meta["userFavorite"] = dto.Favorite;
-                    meta["userRating"] = dto.Rating;
-                    meta["userMemo"] = dto.Memo ?? "";
-                    var opts = new JsonSerializerOptions { WriteIndented = true };
-                    await System.IO.File.WriteAllTextAsync(metaJsonPath, JsonSerializer.Serialize(meta, opts));
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "[UserData] Failed to update metadata.json for Work {WorkId}", workId);
-                }
-            }
+            var success = await _userDataUseCase.PatchUserDataAsync(workId, dto.Favorite, dto.Rating, dto.Memo, ct);
+            if (!success) return NotFound();
 
             return Ok(new { favorite = dto.Favorite, rating = dto.Rating, memo = dto.Memo });
         }
@@ -282,43 +135,17 @@ namespace WISE.Api.Controllers
             string? Series, string? ReleaseDate, string? Genre, string? Runtime);
 
         [HttpPatch("{id}/metadata")]
-        public async Task<IActionResult> PatchMetadata(string id, [FromBody] ManualMetadataDto dto)
+        public async Task<IActionResult> PatchMetadata(string id, [FromBody] ManualMetadataDto dto, CancellationToken ct)
         {
             if (!Guid.TryParse(id, out var workId)) return BadRequest("Invalid Work ID format.");
 
-            var work = await _dbContext.Works
-                .Include(w => w.MetadataFields)
-                .FirstOrDefaultAsync(w => w.Id == workId);
-            if (work == null) return NotFound();
+            var success = await _metadataUseCase.PatchManualMetadataAsync(
+                workId,
+                new WorkMetadataUseCase.ManualFields(
+                    dto.Title, dto.Actress, dto.Maker, dto.Label, dto.Series, dto.ReleaseDate, dto.Genre, dto.Runtime),
+                ct);
+            if (!success) return NotFound();
 
-            var fields = new Dictionary<string, string?>
-            {
-                ["Title"]       = dto.Title,
-                ["Actress"]     = dto.Actress,
-                ["Maker"]       = dto.Maker,
-                ["Label"]       = dto.Label,
-                ["Series"]      = dto.Series,
-                ["ReleaseDate"] = dto.ReleaseDate,
-                ["Genre"]       = dto.Genre,
-                ["Runtime"]     = dto.Runtime,
-            };
-
-            foreach (var (fieldName, value) in fields)
-            {
-                if (value is null) continue;
-
-                // 既存 primary を非 primary に降格
-                foreach (var existing in work.MetadataFields.Where(m => m.FieldName == fieldName && m.IsPrimary))
-                    existing.SetPrimary(false);
-
-                // Manual エントリを追加（最高優先度 999）
-                var newField = new WISE.Domain.Entities.MetadataField(fieldName, value, "Manual", true, 999);
-                newField.SetWorkId(work.Id);
-                _dbContext.MetadataFields.Add(newField);
-            }
-
-            work.UpdateStatus(WISE.Domain.Enums.ProcessingStatus.Organized);
-            await _dbContext.SaveChangesAsync();
             return Ok(new { id = workId, status = "Organized" });
         }
 
@@ -326,39 +153,13 @@ namespace WISE.Api.Controllers
         /// .thumbnails/ 内の画像アセット（Thumbnail/SampleImage）一覧を返す。
         /// </summary>
         [HttpGet("{id}/thumbnail-assets")]
-        public async Task<IActionResult> GetThumbnailAssets(string id)
+        public async Task<IActionResult> GetThumbnailAssets(string id, CancellationToken ct)
         {
             if (!Guid.TryParse(id, out var workId)) return BadRequest("Invalid Work ID.");
-            var work = await _dbContext.Works.AsNoTracking().Include(w => w.Assets).Include(w => w.MetadataFields)
-                .FirstOrDefaultAsync(w => w.Id == workId);
-            if (work == null) return NotFound();
 
-            var allowed = new[]
-            {
-                WISE.Domain.Enums.AssetType.PortraitCover,
-                WISE.Domain.Enums.AssetType.LandscapeCover,
-                WISE.Domain.Enums.AssetType.Thumbnail,
-                WISE.Domain.Enums.AssetType.SampleImage,
-            };
+            var assets = await _query.GetThumbnailAssetsAsync(workId, ct);
+            if (assets == null) return NotFound();
 
-            // 現在のPortraitCover primary field の assetId を特定（Manualかどうか判定用）
-            var currentCoverUrl = work.MetadataFields
-                .Where(m => m.FieldName == "PortraitCover" && m.IsPrimary && m.ProviderId == "Manual")
-                .Select(m => m.Value)
-                .FirstOrDefault();
-
-            var assets = work.Assets
-                .Where(a => allowed.Contains(a.AssetType) && a.FilePath != null && System.IO.File.Exists(a.FilePath))
-                .OrderBy(a => a.AssetType) // PortraitCover → LandscapeCover → Thumbnail → SampleImage
-                .Select(a => new
-                {
-                    a.Id,
-                    a.OriginalFilename,
-                    AssetType = a.AssetType.ToString(),
-                    Url = $"/api/assets/{a.Id}/content",
-                    IsCurrentCover = currentCoverUrl != null && currentCoverUrl.Contains(a.Id.ToString()),
-                })
-                .ToList();
             return Ok(assets);
         }
 
@@ -366,66 +167,20 @@ namespace WISE.Api.Controllers
         /// .thumbnails/ 内の画像をポートレートカバーとして設定する。
         /// </summary>
         [HttpPost("{id}/set-cover")]
-        public async Task<IActionResult> SetCover(string id, [FromBody] System.Text.Json.JsonElement body)
+        public async Task<IActionResult> SetCover(string id, [FromBody] System.Text.Json.JsonElement body, CancellationToken ct)
         {
             if (!Guid.TryParse(id, out var workId)) return BadRequest("Invalid Work ID.");
             string? assetIdStr = null;
             if (body.TryGetProperty("assetId", out var el)) assetIdStr = el.GetString();
             if (!Guid.TryParse(assetIdStr, out var assetId)) return BadRequest("assetId is required.");
 
-            var work = await _dbContext.Works.Include(w => w.Assets).Include(w => w.MetadataFields)
-                .FirstOrDefaultAsync(w => w.Id == workId);
-            if (work == null) return NotFound();
-
-            var asset = work.Assets.FirstOrDefault(a => a.Id == assetId);
-            if (asset == null) return NotFound(new { Error = "Asset not found." });
-
-            var assetApiUrl = $"/api/assets/{assetId}/content";
-
-            // Demote all PortraitCover primary fields
-            foreach (var f in work.MetadataFields.Where(m => m.FieldName == "PortraitCover" && m.IsPrimary))
-                f.SetPrimary(false);
-
-            // Check if the selected asset is a PortraitCover (= revert to original provider)
-            var isOriginalCover = asset.AssetType == WISE.Domain.Enums.AssetType.PortraitCover;
-            if (isOriginalCover)
+            var (result, coverUrl) = await _coverUseCase.SetCoverAsync(workId, assetId, ct);
+            return result switch
             {
-                // Remove any Manual PortraitCover field and promote the field whose value points to this asset
-                var manualField = work.MetadataFields.FirstOrDefault(m => m.FieldName == "PortraitCover" && m.ProviderId == "Manual");
-                if (manualField != null) _dbContext.MetadataFields.Remove(manualField);
-
-                var originalField = work.MetadataFields.FirstOrDefault(m =>
-                    m.FieldName == "PortraitCover" && m.ProviderId != "Manual" && m.Value == assetApiUrl);
-                if (originalField != null)
-                    originalField.SetPrimary(true);
-                else
-                {
-                    // Promote highest confidence non-manual field
-                    var best = work.MetadataFields
-                        .Where(m => m.FieldName == "PortraitCover" && m.ProviderId != "Manual")
-                        .OrderByDescending(m => m.ConfidenceScore).FirstOrDefault();
-                    if (best != null) best.SetPrimary(true);
-                }
-            }
-            else
-            {
-                // Add or update Manual PortraitCover pointing to thumbnail/sample
-                var existing = work.MetadataFields.FirstOrDefault(m => m.FieldName == "PortraitCover" && m.ProviderId == "Manual");
-                if (existing != null)
-                {
-                    existing.UpdateValue(assetApiUrl, 999, "Manual");
-                    existing.SetPrimary(true);
-                }
-                else
-                {
-                    var newField = new WISE.Domain.Entities.MetadataField("PortraitCover", assetApiUrl, "Manual", true, 999);
-                    newField.SetWorkId(workId);
-                    _dbContext.MetadataFields.Add(newField);
-                }
-            }
-
-            await _dbContext.SaveChangesAsync();
-            return Ok(new { coverUrl = assetApiUrl });
+                WorkCoverUseCase.SetCoverResult.WorkNotFound => NotFound(),
+                WorkCoverUseCase.SetCoverResult.AssetNotFound => NotFound(new { Error = "Asset not found." }),
+                _ => Ok(new { coverUrl }),
+            };
         }
 
         /// <summary>
@@ -434,7 +189,7 @@ namespace WISE.Api.Controllers
         /// </summary>
         [HttpPost("{id}/upload-cover")]
         [Consumes("multipart/form-data")]
-        public async Task<IActionResult> UploadCover(string id, IFormFile file)
+        public async Task<IActionResult> UploadCover(string id, IFormFile file, CancellationToken ct)
         {
             if (!Guid.TryParse(id, out var workId)) return BadRequest("Invalid Work ID.");
             if (file == null || file.Length == 0) return BadRequest("No file provided.");
@@ -443,97 +198,32 @@ namespace WISE.Api.Controllers
             if (!new[] { ".jpg", ".jpeg", ".png", ".webp", ".gif" }.Contains(ext))
                 return BadRequest("Unsupported image format.");
 
-            var work = await _dbContext.Works.Include(w => w.Assets).Include(w => w.MetadataFields)
-                .FirstOrDefaultAsync(w => w.Id == workId);
-            if (work == null) return NotFound();
-
-            // .thumbnails/ フォルダをビデオアセット横に確保する
-            var videoAsset = work.Assets.FirstOrDefault(a =>
-                a.FilePath != null && (a.FilePath.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase)
-                                    || a.FilePath.EndsWith(".mkv", StringComparison.OrdinalIgnoreCase)));
-            if (videoAsset?.FilePath == null)
-                return StatusCode(500, new { Error = "Video asset not found." });
-
-            var coverDir = System.IO.Path.GetDirectoryName(videoAsset.FilePath) ?? string.Empty;
-            var thumbDir = System.IO.Path.Combine(coverDir, ".thumbnails");
-            System.IO.Directory.CreateDirectory(thumbDir);
-
-            // ユニーク名でファイル保存
-            var safeBase = Regex.Replace(System.IO.Path.GetFileNameWithoutExtension(file.FileName), @"[^\w\-]", "_");
-            var newFileName = $"upload_{DateTime.UtcNow:yyyyMMddHHmmss}_{safeBase}{ext}";
-            var destPath = System.IO.Path.Combine(thumbDir, newFileName);
-
-            await using (var stream = System.IO.File.Create(destPath))
-                await file.CopyToAsync(stream);
-
-            // Asset レコード作成
-            var assetId = Guid.NewGuid();
-            var newAsset = new WISE.Domain.Entities.Asset(
-                destPath, newFileName, new System.IO.FileInfo(destPath).Length, null, assetId,
-                WISE.Domain.Enums.AssetType.PortraitCover);
-            work.AddAsset(newAsset);
-
-            var assetApiUrl = $"/api/assets/{assetId}/content";
-
-            // 既存のPortraitCover primaryを降格
-            foreach (var f in work.MetadataFields.Where(m => m.FieldName == "PortraitCover" && m.IsPrimary))
-                f.SetPrimary(false);
-
-            // Manual MetadataField として設定（confidence 999）
-            var existingManual = work.MetadataFields.FirstOrDefault(m => m.FieldName == "PortraitCover" && m.ProviderId == "Manual");
-            if (existingManual != null)
+            var (result, assetId, url) = await _coverUseCase.UploadCoverAsync(workId, file, ct);
+            return result switch
             {
-                existingManual.UpdateValue(assetApiUrl, 999, "Manual");
-                existingManual.SetPrimary(true);
-            }
-            else
-            {
-                var newField = new WISE.Domain.Entities.MetadataField("PortraitCover", assetApiUrl, "Manual", true, 999);
-                newField.SetWorkId(workId);
-                _dbContext.MetadataFields.Add(newField);
-            }
-
-            await _dbContext.SaveChangesAsync();
-            return Ok(new { assetId, url = assetApiUrl });
+                WorkCoverUseCase.UploadCoverResult.WorkNotFound => NotFound(),
+                WorkCoverUseCase.UploadCoverResult.VideoAssetNotFound => StatusCode(500, new { Error = "Video asset not found." }),
+                _ => Ok(new { assetId, url }),
+            };
         }
 
         /// <summary>
         /// 動画ファイルの場所をエクスプローラーで開く（Windows専用）。
         /// </summary>
         [HttpPost("{id}/open-folder")]
-        public async Task<IActionResult> OpenFolder(string id)
+        public async Task<IActionResult> OpenFolder(string id, CancellationToken ct)
         {
             if (!Guid.TryParse(id, out var workId)) return BadRequest("Invalid Work ID format.");
-            var work = await _dbContext.Works.Include(w => w.Assets).FirstOrDefaultAsync(w => w.Id == workId);
-            if (work == null) return NotFound();
 
-            string? pathToOpen = null;
-
-            // ビデオファイルを優先
-            var videoAsset = work.Assets.FirstOrDefault(a =>
-                a.FilePath != null && (a.FilePath.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase)
-                                    || a.FilePath.EndsWith(".mkv", StringComparison.OrdinalIgnoreCase)));
-            if (videoAsset?.FilePath != null && System.IO.File.Exists(videoAsset.FilePath))
-            {
-                pathToOpen = videoAsset.FilePath;
-            }
-            else
-            {
-                // ビデオがない場合は任意のアセットを探す
-                var anyAsset = work.Assets.FirstOrDefault(a => !string.IsNullOrEmpty(a.FilePath));
-                if (anyAsset?.FilePath != null && System.IO.File.Exists(anyAsset.FilePath))
-                {
-                    pathToOpen = anyAsset.FilePath;
-                }
-            }
-
-            if (string.IsNullOrEmpty(pathToOpen))
+            var (result, path) = await _fileUseCase.ResolveOpenableFilePathAsync(workId, ct);
+            if (result == WorkFileUseCase.OpenFolderResult.WorkNotFound) return NotFound();
+            if (result == WorkFileUseCase.OpenFolderResult.NoAccessibleFile)
                 return NotFound(new { Error = "No accessible files found." });
 
             try
             {
-                System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{pathToOpen}\"");
-                return Ok(new { path = pathToOpen });
+                System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{path}\"");
+                return Ok(new { path });
             }
             catch (Exception ex)
             {
@@ -544,67 +234,36 @@ namespace WISE.Api.Controllers
         public record AddUserTagDto(string Value);
 
         [HttpPost("{id}/user-tags")]
-        public async Task<IActionResult> AddUserTag(string id, [FromBody] AddUserTagDto dto)
+        public async Task<IActionResult> AddUserTag(string id, [FromBody] AddUserTagDto dto, CancellationToken ct)
         {
             if (!Guid.TryParse(id, out var workId)) return BadRequest();
             if (string.IsNullOrWhiteSpace(dto.Value)) return BadRequest("Tag value required");
 
-            var work = await _dbContext.Works
-                .Include(w => w.MetadataFields)
-                .FirstOrDefaultAsync(w => w.Id == workId);
-            if (work == null) return NotFound();
-
-            if (work.MetadataFields.Any(m => m.FieldName == "UserTag" && m.Value == dto.Value.Trim()))
-                return Conflict("Tag already exists");
-
-            var field = new WISE.Domain.Entities.MetadataField("UserTag", dto.Value.Trim(), "User", true, 100);
-            field.SetWorkId(work.Id);
-            _dbContext.MetadataFields.Add(field);
-            await _dbContext.SaveChangesAsync();
-            return Ok(new { fieldName = "UserTag", value = dto.Value.Trim() });
+            var result = await _metadataUseCase.AddUserTagAsync(workId, dto.Value, ct);
+            return result switch
+            {
+                WorkMetadataUseCase.AddUserTagResult.NotFound => NotFound(),
+                WorkMetadataUseCase.AddUserTagResult.AlreadyExists => Conflict("Tag already exists"),
+                _ => Ok(new { fieldName = "UserTag", value = dto.Value.Trim() }),
+            };
         }
 
         [HttpDelete("{id}/user-tags/{tagValue}")]
-        public async Task<IActionResult> DeleteUserTag(string id, string tagValue)
+        public async Task<IActionResult> DeleteUserTag(string id, string tagValue, CancellationToken ct)
         {
             if (!Guid.TryParse(id, out var workId)) return BadRequest();
 
-            var field = await _dbContext.MetadataFields
-                .FirstOrDefaultAsync(m => m.WorkId == workId && m.FieldName == "UserTag" && m.Value == tagValue);
-            if (field == null) return NotFound();
-
-            _dbContext.MetadataFields.Remove(field);
-            await _dbContext.SaveChangesAsync();
-            return NoContent();
+            var success = await _metadataUseCase.DeleteUserTagAsync(workId, tagValue, ct);
+            return success ? NoContent() : NotFound();
         }
 
         [HttpDelete("{id}/genre-tags/{tagValue}")]
-        public async Task<IActionResult> DeleteGenreTag(string id, string tagValue)
+        public async Task<IActionResult> DeleteGenreTag(string id, string tagValue, CancellationToken ct)
         {
             if (!Guid.TryParse(id, out var workId)) return BadRequest();
 
-            var genreFields = await _dbContext.MetadataFields
-                .Where(m => m.WorkId == workId && m.FieldName == "Genre")
-                .ToListAsync();
-
-            bool changed = false;
-            foreach (var gf in genreFields)
-            {
-                var allTags = gf.Value.Split('|').Select(t => t.Trim()).Where(t => t != "").ToList();
-                var remaining = allTags.Where(t => t != tagValue).ToList();
-                if (remaining.Count != allTags.Count)
-                {
-                    changed = true;
-                    if (remaining.Count == 0)
-                        _dbContext.MetadataFields.Remove(gf);
-                    else
-                        gf.UpdateValue(string.Join("|", remaining), gf.ConfidenceScore, gf.ProviderId);
-                }
-            }
-
-            if (!changed) return NotFound();
-            await _dbContext.SaveChangesAsync();
-            return NoContent();
+            var success = await _metadataUseCase.DeleteGenreTagAsync(workId, tagValue, ct);
+            return success ? NoContent() : NotFound();
         }
 
         /// <summary>
@@ -612,91 +271,31 @@ namespace WISE.Api.Controllers
         /// deleteFiles=true の場合、ディスク上の物理ファイル（動画・カバー等）も削除する。
         /// </summary>
         [HttpDelete("{id}")]
-        public async Task<IActionResult> DeleteWork(string id, [FromQuery] bool deleteFiles = false)
+        public async Task<IActionResult> DeleteWork(string id, [FromQuery] bool deleteFiles = false, CancellationToken ct = default)
         {
             if (!Guid.TryParse(id, out var workId))
                 return BadRequest("Invalid Work ID format.");
 
-            var work = await _dbContext.Works
-                .Include(w => w.Assets)
-                .Include(w => w.MetadataFields)
-                .FirstOrDefaultAsync(w => w.Id == workId);
-
-            if (work == null)
-                return NotFound();
-
-            var filePaths = deleteFiles
-                ? work.Assets.Select(a => a.FilePath).OfType<string>().ToList()
-                : new List<string>();
-
-            // 物理ファイル削除を DB 削除より先に試行する。
-            // ロック中のファイル等で削除に失敗した場合は DB を変更せず中断し、
-            // 呼び出し元がリトライできるようにする（孤立ファイル化を防ぐ）。
-            if (deleteFiles)
+            var (result, filesDeleted, lockedFiles) = await _fileUseCase.DeleteWorkAsync(workId, deleteFiles, ct);
+            return result switch
             {
-                var lockedPaths = new List<string>();
-                foreach (var path in filePaths)
+                WorkFileUseCase.DeleteResult.NotFound => NotFound(),
+                WorkFileUseCase.DeleteResult.FilesLocked => Conflict(new
                 {
-                    if (path == null || !System.IO.File.Exists(path)) continue;
-                    try
-                    {
-                        System.IO.File.Delete(path);
-                    }
-                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-                    {
-                        _logger.LogWarning(ex, "[Delete] File locked or inaccessible: {Path}", path);
-                        lockedPaths.Add(path);
-                    }
-                }
-
-                if (lockedPaths.Count > 0)
-                {
-                    return Conflict(new
-                    {
-                        error = "一部のファイルが使用中のため削除できませんでした。ファイルを閉じてから再試行してください。",
-                        lockedFiles = lockedPaths,
-                    });
-                }
-
-                // 空になったフォルダを整理
-                foreach (var path in filePaths)
-                {
-                    if (path == null) continue;
-                    var dir = Path.GetDirectoryName(path);
-                    if (dir != null && Directory.Exists(dir) && !Directory.EnumerateFileSystemEntries(dir).Any())
-                    {
-                        try { Directory.Delete(dir); }
-                        catch (Exception ex) { _logger.LogWarning(ex, "[Delete] Failed to remove empty dir: {Dir}", dir); }
-                    }
-                }
-            }
-
-            // DB から関連レコードをすべて削除
-            var workTarget = $"Work_{workId}";
-            var jobs = await _dbContext.Jobs.Where(j => j.Target == workTarget).ToListAsync();
-            var events = await _dbContext.EventLogs.Where(e => e.TargetId == workId).ToListAsync();
-
-            _dbContext.Jobs.RemoveRange(jobs);
-            _dbContext.EventLogs.RemoveRange(events);
-            _dbContext.Works.Remove(work); // MetadataFields と Assets は cascade delete
-
-            await _dbContext.SaveChangesAsync();
-            _logger.LogInformation("[Delete] Work {WorkId} ({Id}) deleted from DB.", workId, work.PrimaryIdentifier);
-
-            return Ok(new { deleted = true, filesDeleted = filePaths.Count });
+                    error = "一部のファイルが使用中のため削除できませんでした。ファイルを閉じてから再試行してください。",
+                    lockedFiles,
+                }),
+                _ => Ok(new { deleted = true, filesDeleted }),
+            };
         }
 
         [HttpGet("{id}/cover")]
-        public async Task<IActionResult> GetCover(string id)
+        public async Task<IActionResult> GetCover(string id, CancellationToken ct)
         {
             if (!Guid.TryParse(id, out var workId))
                 return BadRequest("Invalid Work ID format.");
 
-            var work = await _dbContext.Works
-                .Include(w => w.Assets)
-                .AsNoTracking()
-                .FirstOrDefaultAsync(w => w.Id == workId);
-
+            var work = await _query.GetWorkWithAssetsAsync(workId, ct);
             if (work == null) return NotFound();
 
             var result = await _coverChain.ResolveAsync(work);
@@ -719,15 +318,12 @@ namespace WISE.Api.Controllers
         }
 
         [HttpGet("{id}/viewer-info")]
-        public async Task<IActionResult> GetViewerInfo(string id)
+        public async Task<IActionResult> GetViewerInfo(string id, CancellationToken ct)
         {
             if (!Guid.TryParse(id, out var workId))
                 return BadRequest("Invalid Work ID format.");
 
-            var work = await _dbContext.Works
-                .AsNoTracking()
-                .FirstOrDefaultAsync(w => w.Id == workId);
-
+            var work = await _query.GetForViewerInfoAsync(workId, ct);
             if (work == null) return NotFound();
 
             var viewer = _viewers.FirstOrDefault(v => v.MediaType == work.MediaType);
@@ -760,34 +356,7 @@ namespace WISE.Api.Controllers
             if (!Guid.TryParse(id, out var workId))
                 return BadRequest("Invalid Work ID format.");
 
-            // Determine which fields to search for related works
-            var targetFields = string.IsNullOrWhiteSpace(field)
-                ? new[] { "Actress", "ActressTag", "Series", "Circle", "Author", "Maker" }
-                : new[] { field };
-
-            // Get values of those fields from the source work
-            var sourceValues = await _dbContext.MetadataFields
-                .AsNoTracking()
-                .Where(m => m.WorkId == workId && targetFields.Contains(m.FieldName) && m.Value != null && m.Value != "")
-                .Select(m => new { m.FieldName, m.Value })
-                .ToListAsync(ct);
-
-            if (sourceValues.Count == 0)
-                return Ok(new object[0]);
-
-            var fieldNames = sourceValues.Select(v => v.FieldName).Distinct().ToList();
-            var values     = sourceValues.Select(v => v.Value).Distinct().ToList();
-
-            var related = await _dbContext.Works
-                .AsNoTracking()
-                .Include(w => w.MetadataFields)
-                .Include(w => w.Assets)
-                .Where(w => w.Id != workId
-                    && w.MetadataFields.Any(m => fieldNames.Contains(m.FieldName) && values.Contains(m.Value)))
-                .OrderByDescending(w => w.CreatedAt)
-                .Take(limit)
-                .ToListAsync(ct);
-
+            var related = await _query.GetRelatedAsync(workId, field, limit, ct);
             return Ok(related.Select(WorkItemMapper.Map));
         }
 
@@ -797,11 +366,7 @@ namespace WISE.Api.Controllers
             if (!Guid.TryParse(id, out var workId))
                 return BadRequest("Invalid Work ID format.");
 
-            var work = await _dbContext.Works
-                .AsNoTracking()
-                .Include(w => w.Assets)
-                .FirstOrDefaultAsync(w => w.Id == workId, ct);
-
+            var work = await _query.GetWorkWithAssetsAsync(workId, ct);
             if (work == null) return NotFound();
 
             var epubAsset = work.Assets.FirstOrDefault(a =>
