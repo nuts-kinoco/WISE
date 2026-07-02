@@ -34,7 +34,7 @@ public class SettingsController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetAll(CancellationToken ct)
     {
-        var stored = await _db.AppSettings.ToDictionaryAsync(s => s.Key, s => s.Value, ct);
+        var stored = await _db.AppSettings.AsNoTracking().ToDictionaryAsync(s => s.Key, s => s.Value, ct);
 
         var result = Defaults
             .Select(kv => new
@@ -157,8 +157,8 @@ public class SettingsController : ControllerBase
         }
         else
         {
+            // FindAsync で取得済み＝追跡中のため、SetValue の変更検知だけで保存される
             existing.SetValue(dto.Value);
-            _db.AppSettings.Update(existing);
         }
 
         await _db.SaveChangesAsync(ct);

@@ -23,18 +23,12 @@ public class HomeController : ControllerBase
         [FromQuery] string? deviceId,
         CancellationToken ct)
     {
-        var tasks = new[]
-        {
-            GetContinueWatchingAsync(deviceId, ct),
-            GetRecentlyAddedAsync(ct),
-            GetFavoritesAsync(ct),
-        };
-
-        await Task.WhenAll(tasks);
-
-        var continueWatching = await tasks[0];
-        var recentlyAdded    = await tasks[1];
-        var favorites        = await tasks[2];
+        // 注意: DbContext はスレッドセーフではないため、同一コンテキストへの
+        // 並行クエリ（Task.WhenAll）は禁止。逐次 await で実行する。
+        // （SQLite プロバイダは実質同期実行のため実行時間は変わらない）
+        var continueWatching = await GetContinueWatchingAsync(deviceId, ct);
+        var recentlyAdded    = await GetRecentlyAddedAsync(ct);
+        var favorites        = await GetFavoritesAsync(ct);
 
         return Ok(new
         {

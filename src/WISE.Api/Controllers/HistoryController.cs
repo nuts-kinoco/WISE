@@ -35,6 +35,7 @@ namespace WISE.Api.Controllers
         public async Task<IActionResult> GetHistory()
         {
             var eventLogs = await _dbContext.EventLogs
+                .AsNoTracking()
                 .Include(e => e.TargetWork)
                 .OrderByDescending(e => e.OccurredAt)
                 .Take(100)

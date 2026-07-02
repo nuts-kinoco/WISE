@@ -33,6 +33,7 @@ namespace WISE.Api.Controllers
         public async Task<IActionResult> GetJobs()
         {
             var jobs = await _dbContext.Jobs
+                .AsNoTracking()
                 .OrderByDescending(j => j.CreatedAt)
                 .Take(100)
                 .ToListAsync();
@@ -54,6 +55,7 @@ namespace WISE.Api.Controllers
             };
 
             var jobs = await _dbContext.Jobs
+                .AsNoTracking()
                 .Where(j => activeStatuses.Contains(j.Status))
                 .OrderBy(j => j.CreatedAt)
                 .ToListAsync();
@@ -70,6 +72,7 @@ namespace WISE.Api.Controllers
                 .ToList();
 
             var identifiers = await _dbContext.Works
+                .AsNoTracking()
                 .Where(w => workIds.Contains(w.Id))
                 .Select(w => new { w.Id, w.PrimaryIdentifier })
                 .ToDictionaryAsync(w => w.Id, w => w.PrimaryIdentifier);
@@ -245,11 +248,16 @@ namespace WISE.Api.Controllers
             }
             if (workIds.Count == 0) return BadRequest(new { Error = "workIds is required." });
 
+            // 存在するWorkIdを1クエリで検証する（ループ内FindAsyncのN+1回避）
+            var existingIds = await _dbContext.Works
+                .AsNoTracking()
+                .Where(w => workIds.Contains(w.Id))
+                .Select(w => w.Id)
+                .ToListAsync();
+
             int queued = 0;
-            foreach (var workId in workIds)
+            foreach (var workId in existingIds)
             {
-                var work = await _dbContext.Works.FindAsync(workId);
-                if (work == null) continue;
                 var payload = System.Text.Json.JsonSerializer.Serialize(new { WorkId = workId });
                 var job = new WISE.Domain.Entities.Job("FetchMetadata", $"Work_{workId}", payload);
                 job.MarkAsQueued();

@@ -21,7 +21,7 @@ namespace WISE.Api.Controllers
         [HttpGet]
         public async Task<IActionResult> GetAll()
         {
-            var folders = await _dbContext.WatchFolders.OrderByDescending(w => w.CreatedAt).ToListAsync();
+            var folders = await _dbContext.WatchFolders.AsNoTracking().OrderByDescending(w => w.CreatedAt).ToListAsync();
             return Ok(folders);
         }
 
