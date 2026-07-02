@@ -241,9 +241,9 @@ export default function OrganizePage() {
         case "title":       cmp = (a.title    ?? "").localeCompare(b.title    ?? "", "ja"); break;
         case "actress":     cmp = (a.actress  ?? "").localeCompare(b.actress  ?? "", "ja"); break;
         case "maker":       cmp = (a.maker    ?? "").localeCompare(b.maker    ?? "", "ja"); break;
-        case "metadataStatus": cmp = a.metadataStatus.localeCompare(b.metadataStatus); break;
+        case "metadataStatus": cmp = (a.metadataStatus ?? "").localeCompare(b.metadataStatus ?? ""); break;
         case "rating":   cmp = (a.rating   ?? -1) - (b.rating   ?? -1); break;
-        case "favorite": cmp = Number(b.favorite) - Number(a.favorite); break;
+        case "favorite": cmp = Number(a.favorite) - Number(b.favorite); break;
       }
       return sortDir === "asc" ? cmp : -cmp;
     });

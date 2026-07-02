@@ -19,8 +19,9 @@ function getVideoAsset(work: DuplicateWork) {
 }
 
 function getTotalVideoSize(work: DuplicateWork): number {
-  const vid = getVideoAsset(work);
-  return vid?.fileSize ?? 0;
+  return work.assets
+    .filter((a) => a.assetType === "Video" || a.originalFilename.match(/\.(mp4|mkv|avi|mov)$/i))
+    .reduce((sum, a) => sum + (a.fileSize ?? 0), 0);
 }
 
 interface GroupState {

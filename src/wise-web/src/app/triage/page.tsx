@@ -138,8 +138,11 @@ export default function TriagePage() {
         }),
       });
       if (!res.ok) throw new Error("save failed");
+      const result: { status?: string } = await res.json();
       setWorks(prev => prev.map(w =>
-        w.id === work.id ? { ...w, saving: false, dirty: false, saved: true } : w
+        w.id === work.id
+          ? { ...w, saving: false, dirty: false, saved: true, metadataStatus: result.status ?? w.metadataStatus }
+          : w
       ));
     } catch {
       setWorks(prev => prev.map(w => w.id === work.id ? { ...w, saving: false } : w));
