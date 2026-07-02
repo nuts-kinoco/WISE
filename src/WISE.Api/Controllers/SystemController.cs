@@ -1,11 +1,10 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using WISE.Infrastructure.Data;
+using WISE.Api.UseCases;
+using WISE.Application.Queries;
 
 namespace WISE.Api.Controllers
 {
@@ -13,47 +12,34 @@ namespace WISE.Api.Controllers
     [Route("api/[controller]")]
     public class SystemController : ControllerBase
     {
-        private readonly WiseDbContext _dbContext;
+        private readonly ISystemHistoryQueryService _historyQuery;
+        private readonly SystemMaintenanceUseCase _maintenanceUseCase;
 
-        public SystemController(WiseDbContext dbContext)
+        public SystemController(ISystemHistoryQueryService historyQuery, SystemMaintenanceUseCase maintenanceUseCase)
         {
-            _dbContext = dbContext;
+            _historyQuery = historyQuery;
+            _maintenanceUseCase = maintenanceUseCase;
         }
 
         [HttpGet("history")]
-        public async Task<IActionResult> GetHistory([FromQuery] int limit = 200)
+        public async Task<IActionResult> GetHistory([FromQuery] int limit = 200, CancellationToken ct = default)
         {
             limit = Math.Clamp(limit, 1, 1000);
-            var logs = await _dbContext.EventLogs
-                .Include(e => e.TargetWork)
-                .OrderByDescending(e => e.OccurredAt)
-                .Take(limit)
-                .Select(e => new
-                {
-                    Id = e.Id,
-                    Timestamp = e.OccurredAt,
-                    EventType = e.EventType,
-                    TargetWorkId = e.TargetId,
-                    TargetWorkName = e.TargetWork != null ? e.TargetWork.PrimaryIdentifier : null,
-                    Summary = e.Payload
-                })
-                .ToListAsync();
-
+            var logs = await _historyQuery.GetHistoryAsync(limit, ct);
             return Ok(logs);
         }
 
         [HttpGet("history/count")]
-        public async Task<IActionResult> GetHistoryCount()
+        public async Task<IActionResult> GetHistoryCount(CancellationToken ct)
         {
-            var count = await _dbContext.EventLogs.CountAsync();
+            var count = await _historyQuery.GetHistoryCountAsync(ct);
             return Ok(new { count });
         }
 
         [HttpDelete("history")]
-        public async Task<IActionResult> ClearHistory()
+        public async Task<IActionResult> ClearHistory(CancellationToken ct)
         {
-            var count = await _dbContext.EventLogs.CountAsync();
-            await _dbContext.EventLogs.ExecuteDeleteAsync();
+            var count = await _maintenanceUseCase.ClearHistoryAsync(ct);
             return Ok(new { deleted = count });
         }
 

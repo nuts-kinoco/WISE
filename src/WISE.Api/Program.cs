@@ -186,6 +186,8 @@ builder.Services.AddScoped<WISE.Api.UseCases.JobUseCase>();
 builder.Services.AddScoped<WISE.Application.Queries.IDuplicatesQueryService, WISE.Infrastructure.Data.Queries.DuplicatesQueryService>();
 builder.Services.AddScoped<WISE.Api.UseCases.DuplicateResolveUseCase>();
 builder.Services.AddScoped<WISE.Application.Queries.IWorksQueryService, WISE.Infrastructure.Data.Queries.WorksQueryService>();
+builder.Services.AddScoped<WISE.Application.Queries.ISystemHistoryQueryService, WISE.Infrastructure.Data.Queries.SystemHistoryQueryService>();
+builder.Services.AddScoped<WISE.Api.UseCases.SystemMaintenanceUseCase>();
 builder.Services.AddScoped<WISE.Api.UseCases.WorkUserDataUseCase>();
 builder.Services.AddScoped<WISE.Api.UseCases.WorkMetadataUseCase>();
 builder.Services.AddScoped<WISE.Api.UseCases.WorkCoverUseCase>();
