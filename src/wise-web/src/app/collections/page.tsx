@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { ArrowLeft, FolderHeart, Plus, Trash2, Loader2 } from "lucide-react";
+import Image from "next/image";
+import { ArrowLeft, FolderHeart, Plus, Trash2, Loader2, Image as ImageIcon } from "lucide-react";
 import {
   fetchCollections,
   createCollection,
@@ -22,18 +23,37 @@ function CollectionCard({
   onDelete: (id: string) => void;
 }) {
   return (
-    <div className="group relative bg-card border border-border/50 rounded-xl p-4 hover:border-primary/40 transition-colors">
-      <Link href={`/collections/${collection.id}`} className="block mb-3">
-        <div className="flex items-center gap-2 mb-1.5">
-          <FolderHeart className="w-4 h-4 text-primary/70 shrink-0" />
-          <h3 className="font-semibold text-[14px] truncate">{collection.name}</h3>
+    <div className="group relative bg-card border border-border/50 rounded-xl overflow-hidden hover:border-primary/40 transition-colors flex flex-col h-full">
+      <Link href={`/collections/${collection.id}`} className="block flex-1">
+        <div className="relative w-full h-32 bg-muted/40">
+          {collection.coverUrl ? (
+            <Image
+              src={collection.coverUrl}
+              alt={collection.name}
+              fill
+              className="object-cover transition-transform duration-300 group-hover:scale-105"
+              unoptimized
+            />
+          ) : (
+            <div className="absolute inset-0 flex items-center justify-center text-muted-foreground/30">
+              <ImageIcon className="w-8 h-8" />
+            </div>
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+          <div className="absolute bottom-2 left-3 right-3 flex items-center gap-2">
+            <FolderHeart className="w-4 h-4 text-white/90 shrink-0" />
+            <h3 className="font-semibold text-[14px] text-white truncate drop-shadow-md">{collection.name}</h3>
+          </div>
         </div>
-        {collection.description && (
-          <p className="text-[12px] text-muted-foreground line-clamp-2">{collection.description}</p>
-        )}
-        <p className="text-[12px] text-muted-foreground/60 mt-1">
-          {collection.itemCount}件
-        </p>
+
+        <div className="p-4 flex flex-col justify-between flex-1">
+          {collection.description && (
+            <p className="text-[12px] text-muted-foreground line-clamp-2 mb-2">{collection.description}</p>
+          )}
+          <p className="text-[12px] text-muted-foreground/60">
+            {collection.itemCount}件
+          </p>
+        </div>
       </Link>
       <button
         onClick={() => onDelete(collection.id)}

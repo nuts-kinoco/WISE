@@ -20,12 +20,19 @@ public class MetadataService
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    private static string[] GetExitFields(MediaType mediaType) => mediaType switch
+    private static string[] GetExitFields(MediaType mediaType, string identifier)
     {
-        MediaType.Comic => ["Title", "Author", "Circle"],
-        MediaType.Book  => ["Title", "Author"],
-        _               => ["Title", "Actress", "Maker"],
-    };
+        if (mediaType == MediaType.Comic) return ["Title", "Author", "Circle"];
+        if (mediaType == MediaType.Book) return ["Title", "Author"];
+
+        // Video specific logic based on identifier
+        if (!string.IsNullOrEmpty(identifier) && identifier.StartsWith("FC2", StringComparison.OrdinalIgnoreCase))
+        {
+            return ["Title"]; // FC2 usually lacks Maker/Actress structurally
+        }
+
+        return ["Title", "Actress", "Maker"];
+    }
 
     private static readonly string[] CoverFields = ["PortraitCover", "LandscapeCover"];
 
@@ -42,7 +49,7 @@ public class MetadataService
             .ToList();
 
         var allResults = new List<MetadataResult>();
-        var exitFields = GetExitFields(context.MediaType);
+        var exitFields = GetExitFields(context.MediaType, context.Identifier);
         bool textSatisfied = false;
         int textSatisfiedAtIndex = groups.Count; // 早期終了した位置
 

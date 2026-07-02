@@ -1126,11 +1126,18 @@ function VideoPlayer({ src, assetId, filename }: { src: string; assetId: string;
     }
   };
 
+  const lastSaveRef = useRef<number>(0);
+
   const handleTimeUpdate = () => {
     const el = videoRef.current;
     if (!el) return;
     setCurrentTime(el.currentTime);
-    localStorage.setItem(storageKey, String(Math.floor(el.currentTime)));
+
+    const now = Date.now();
+    if (now - lastSaveRef.current > 3000) {
+      localStorage.setItem(storageKey, String(Math.floor(el.currentTime)));
+      lastSaveRef.current = now;
+    }
   };
 
   const handleSpeedChange = (s: number) => {

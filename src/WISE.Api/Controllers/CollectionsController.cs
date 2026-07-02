@@ -24,7 +24,6 @@ public class CollectionsController : ControllerBase
     {
         var collections = await _db.Collections
             .AsNoTracking()
-            .Include(c => c.Items)
             .OrderBy(c => c.CreatedAt)
             .Select(c => new
             {
@@ -34,10 +33,37 @@ public class CollectionsController : ControllerBase
                 c.CreatedAt,
                 c.UpdatedAt,
                 itemCount = c.Items.Count,
+                firstWorkId = c.Items.OrderBy(i => i.Order).Select(i => (Guid?)i.WorkId).FirstOrDefault()
             })
             .ToListAsync(ct);
 
-        return Ok(collections);
+        // Fetch cover assets for the first work in each collection
+        var firstWorkIds = collections.Where(c => c.firstWorkId.HasValue).Select(c => c.firstWorkId!.Value).Distinct().ToList();
+        var covers = await _db.Assets
+            .AsNoTracking()
+            .Where(a => firstWorkIds.Contains(a.WorkId!.Value))
+            .Where(a => a.AssetType == WISE.Domain.Enums.AssetType.PortraitCover || a.AssetType == WISE.Domain.Enums.AssetType.LandscapeCover)
+            .ToListAsync(ct);
+
+        // Map WorkId to Cover AssetId (prefer Portrait over Landscape if both exist, simplified by just taking first)
+        var coverMap = covers
+            .GroupBy(a => a.WorkId!.Value)
+            .ToDictionary(g => g.Key, g => g.FirstOrDefault()?.Id);
+
+        var result = collections.Select(c => new
+        {
+            c.Id,
+            c.Name,
+            c.Description,
+            c.CreatedAt,
+            c.UpdatedAt,
+            c.itemCount,
+            coverUrl = c.firstWorkId.HasValue && coverMap.ContainsKey(c.firstWorkId.Value)
+                ? $"/api/assets/{coverMap[c.firstWorkId.Value]}/content"
+                : null
+        });
+
+        return Ok(result);
     }
 
     // ── Create ────────────────────────────────────────────────────────────────
