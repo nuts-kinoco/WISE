@@ -25,22 +25,27 @@ public class MetadataServiceTests
         private readonly IReadOnlyList<MetadataCandidate> _candidates;
         private readonly bool _success;
 
+        private readonly Func<string, bool>? _canHandle;
+
         public FakeProvider(
             string id, int priority,
             IReadOnlyList<MetadataCandidate>? candidates = null,
             bool success = true,
-            IReadOnlySet<string>? providableFields = null)
+            IReadOnlySet<string>? providableFields = null,
+            Func<string, bool>? canHandle = null)
         {
             ProviderId = id;
             Priority = priority;
             _candidates = candidates ?? Array.Empty<MetadataCandidate>();
             _success = success;
             ProvidableFields = providableFields;
+            _canHandle = canHandle;
         }
 
         public string ProviderId { get; }
         public int Priority { get; }
         public IReadOnlySet<string>? ProvidableFields { get; }
+        public bool CanHandle(string identifier) => _canHandle?.Invoke(identifier) ?? true;
 
         public Task<MetadataResult> FetchAsync(MetadataProviderContext context)
             => Task.FromResult(_success
@@ -134,5 +139,55 @@ public class MetadataServiceTests
 
         // 失敗しても Tier2 まで到達している
         results.Should().Contain(r => r.ProviderName == "Tier2" && r.Success);
+    }
+
+    [Fact]
+    public async Task Fc2Identifier_UnconstrainedProviderThatCannotHandleFc2_IsExcludedFromEligibility()
+    {
+        // 回帰再現テスト（Jules QA Sprint30 Prompt D で発見）:
+        // FANZA/Mgs/JavBus/JavLibrary は識別子を機械的にURL化する実装のため、CanHandle制限が
+        // 無い状態だとFC2識別子でも「たまたま」成功し、無関係なMaker/Actress候補を持ち込んで
+        // しまう可能性があった（Priority=80のFANZAが最優先Tierで実行されるため特に深刻）。
+        // 成功してしまうと ProvidableFields=null（制約なし）が「成功したProvider」に含まれ、
+        // GetExitFields が desiredFields 全体（Title/Actress/Maker）を要求してしまい、
+        // FC2 の早期終了が機能しなくなる。
+        //
+        // 修正: FANZA等の実プロバイダに `CanHandle` = "FC2で始まらない" を追加し、
+        // eligibleProviders の時点で除外されるようにした。本テストはその防止線（CanHandle
+        // フィルタリングがMetadataService側で正しく効くこと）を確認する。
+        var fakeFanzaLikeExcluded = new FakeProvider("FanzaLike", priority: 80,
+            candidates: new[] { Cand("FanzaLike", "Actress", 80), Cand("FanzaLike", "Maker", 80) },
+            canHandle: id => !id.StartsWith("FC2", StringComparison.OrdinalIgnoreCase));
+        var fc2 = new FakeProvider("Fc2", priority: 60,
+            candidates: new[] { Cand("Fc2", "Title", 60) },
+            providableFields: new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Title" },
+            canHandle: id => id.StartsWith("FC2", StringComparison.OrdinalIgnoreCase));
+
+        var results = (await Service(fakeFanzaLikeExcluded, fc2).CollectResultsAsync(Context("FC2-PPV-4409072"))).ToList();
+
+        // FanzaLike は CanHandle=false のため一度も実行されない
+        results.Should().NotContain(r => r.ProviderName == "FanzaLike");
+        // Fc2 は Title のみで満足し、正しく早期終了する（＝結果は Fc2 の1件のみ）
+        results.Should().ContainSingle(r => r.ProviderName == "Fc2");
+    }
+
+    [Fact]
+    public async Task Fc2Identifier_IfUnconstrainedProviderSpuriouslySucceeds_EarlyExitIsSuppressed()
+    {
+        // 上記テストの対照実験: CanHandle制限を「していない」場合に何が起こるかを明示する
+        // （＝実際のFANZA等がCanHandleを実装し忘れた場合の退行を検知するための固定用テスト）。
+        // これは「あるべき姿」ではなく「制限しなかった場合の既知の问題」を記録するテスト。
+        var fakeFanzaLikeUnrestricted = new FakeProvider("FanzaLike", priority: 80,
+            candidates: new[] { Cand("FanzaLike", "Title", 80) }); // canHandle未指定=常にtrue、Actress/Makerは取れない
+        var fc2 = new FakeProvider("Fc2", priority: 60,
+            candidates: new[] { Cand("Fc2", "Title", 60) },
+            providableFields: new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Title" });
+
+        var results = (await Service(fakeFanzaLikeUnrestricted, fc2).CollectResultsAsync(Context("FC2-PPV-4409072"))).ToList();
+
+        // CanHandleで除外しない限り、制約なしProviderの成功により早期終了が抑制され、
+        // 結果的に全Tierが実行されてしまう（＝これが実プロバイダ側でCanHandleを追加した理由）
+        results.Should().Contain(r => r.ProviderName == "FanzaLike");
+        results.Should().Contain(r => r.ProviderName == "Fc2");
     }
 }

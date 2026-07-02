@@ -52,6 +52,12 @@ public class FanzaMetadataProvider : IMetadataProvider
     public int Priority => _options.Priority;
     public IReadOnlySet<MediaType>? SupportedMediaTypes => new HashSet<MediaType> { MediaType.Video, MediaType.PhotoBook };
 
+    // FANZAはFC2作品を取り扱わない。ConvertToCidは変換に失敗した識別子も
+    // "-"除去+小文字化でCIDらしき文字列（例: "fc2ppv4409072"）を機械的に生成してしまうため、
+    // 除外しないとFC2識別子が無関係な商品ページに誤マッチする恐れがある。
+    public bool CanHandle(string identifier) =>
+        !identifier.StartsWith("FC2", StringComparison.OrdinalIgnoreCase);
+
     public async Task<MetadataResult> FetchAsync(MetadataProviderContext context)
     {
         if (!_options.IsEnabled)

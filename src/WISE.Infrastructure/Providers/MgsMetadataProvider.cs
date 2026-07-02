@@ -36,6 +36,11 @@ public class MgsMetadataProvider : IMetadataProvider
     public int Priority => _options.Priority;
     public IReadOnlySet<MediaType>? SupportedMediaTypes => new HashSet<MediaType> { MediaType.Video };
 
+    // MGStageはFC2作品を取り扱わない。識別子を直接URL化＋検索フォールバックする実装のため、
+    // 除外しないとFC2識別子で無関係な検索結果を弱くマッチしてしまう恐れがある。
+    public bool CanHandle(string identifier) =>
+        !identifier.StartsWith("FC2", StringComparison.OrdinalIgnoreCase);
+
     public async Task<MetadataResult> FetchAsync(MetadataProviderContext context)
     {
         if (!_options.IsEnabled)

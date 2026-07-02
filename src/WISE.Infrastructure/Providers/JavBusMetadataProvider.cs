@@ -32,6 +32,11 @@ public class JavBusMetadataProvider : IMetadataProvider
     public int Priority => _options.Priority;
     public IReadOnlySet<MediaType>? SupportedMediaTypes => new HashSet<MediaType> { MediaType.Video };
 
+    // JavBusはFC2作品を取り扱わない。検索フォールバック実装のため、除外しないと
+    // FC2識別子が無関係な検索結果に弱くマッチしてしまう恐れがある。
+    public bool CanHandle(string identifier) =>
+        !identifier.StartsWith("FC2", StringComparison.OrdinalIgnoreCase);
+
     public async Task<MetadataResult> FetchAsync(MetadataProviderContext context)
     {
         if (!_options.IsEnabled)
