@@ -408,6 +408,7 @@ export interface CollectionSummary {
   createdAt: string;
   updatedAt: string;
   itemCount: number;
+  coverUrl?: string | null;
 }
 
 export interface CollectionDetail {

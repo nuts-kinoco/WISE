@@ -90,10 +90,9 @@ namespace WISE.Api.Controllers
                 return false;
 
             var len = end - offset + 1;
-            // int.MaxValue 超やキャッシュ上限超はスキップ（PhysicalFile で処理）
-            if (len <= 0 || len > 32 * 1024 * 1024) return false;
+            if (len <= 0) return false;
 
-            count = (int)len;
+            count = (int)System.Math.Min(len, 32 * 1024 * 1024);
             return offset >= 0 && offset < fileLen;
         }
 
