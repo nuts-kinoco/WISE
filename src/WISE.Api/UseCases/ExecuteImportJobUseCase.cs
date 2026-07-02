@@ -12,6 +12,7 @@ using WISE.Domain.Entities;
 using WISE.Domain.Enums;
 using WISE.Domain.Interfaces;
 using WISE.Infrastructure.Data;
+using WISE.Infrastructure.Services;
 
 namespace WISE.Api.UseCases;
 
@@ -20,15 +21,18 @@ public class ExecuteImportJobUseCase
     private readonly WiseDbContext _dbContext;
     private readonly IOutputPathResolver _outputPathResolver;
     private readonly IIdentifierResolver _identifierResolver;
+    private readonly VideoFastStartService _fastStartService;
 
     public ExecuteImportJobUseCase(
         WiseDbContext dbContext,
         IOutputPathResolver outputPathResolver,
-        IIdentifierResolver identifierResolver)
+        IIdentifierResolver identifierResolver,
+        VideoFastStartService fastStartService)
     {
         _dbContext = dbContext;
         _outputPathResolver = outputPathResolver;
         _identifierResolver = identifierResolver;
+        _fastStartService = fastStartService;
     }
 
     public async Task<ExecuteImportJobResult> ExecuteAsync(
@@ -165,6 +169,21 @@ public class ExecuteImportJobUseCase
                 }
             }
 
+            // --- 4.5. 動画のfaststart化（moov atomが末尾にある場合、先頭へ移動） ---
+            // VideoStreamCacheはファイル先頭32MBのみキャッシュするため、moovが末尾にある
+            // 非faststartファイルは再生のたびに巨大ファイル末尾への物理シークが発生し、
+            // 再生開始の遅延・再生中の間欠的な引っかかりの原因になる。インポート時に
+            // 一度だけ変換（-c copyのためロスレス・再エンコードなし）しておくことで
+            // 以降の全再生アクセスで構造的に回避する。対象外拡張子や失敗時は何もしない
+            // （インポート自体は継続する）。
+            long finalFileSize = fileInfo.Length;
+            if (_fastStartService.IsApplicable(finalFilePath))
+            {
+                await _fastStartService.EnsureFastStartAsync(finalFilePath, cancellationToken);
+                if (File.Exists(finalFilePath))
+                    finalFileSize = new FileInfo(finalFilePath).Length;
+            }
+
             // --- 5. Work の検索または作成 ---
             var mediaType = InferMediaType(finalFilePath);
             var workCacheKey = $"{identifier}:{(int)mediaType}";
@@ -199,7 +218,7 @@ public class ExecuteImportJobUseCase
             if (!work.Assets.Any(a => a.FilePath == finalFilePath))
             {
                 var (primaryRole, primaryFormat) = InferAssetRoleAndFormat(finalFilePath);
-                var asset = new Asset(finalFilePath, fileName, fileInfo.Length, "sha256-pending",
+                var asset = new Asset(finalFilePath, fileName, finalFileSize, "sha256-pending",
                     role: primaryRole, storageFormat: primaryFormat);
                 work.AddAsset(asset);
                 addedAssetsCount++;

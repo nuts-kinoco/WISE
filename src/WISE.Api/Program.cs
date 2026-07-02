@@ -134,6 +134,7 @@ builder.Services.AddScoped<WISE.Api.UseCases.ExecuteImportJobUseCase>();
 builder.Services.AddScoped<WISE.Api.UseCases.FetchMetadataJobUseCase>();
 builder.Services.AddSingleton<WISE.Domain.Interfaces.IOutputPathResolver, WISE.Infrastructure.Services.DefaultOutputPathResolver>();
 builder.Services.AddScoped<WISE.Infrastructure.Services.FFmpegThumbnailService>();
+builder.Services.AddScoped<WISE.Infrastructure.Services.VideoFastStartService>();
 
 // Sprint 13: Evidence-Based Identifier Resolution Pipeline
 // IEvidenceProvider は複数登録可能。優先度は登録順ではなく Score の合計で決まる。
