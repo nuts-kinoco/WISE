@@ -182,11 +182,18 @@ Content-Type: application/json
 
 > MetadataFieldの更新は `Manual` Providerとして記録され、最優先（Priority=100）で適用される。
 
-## 2.5 Work削除（Soft Delete）
+## 2.5 Work削除
 
 ```
-DELETE /api/works/{id}
+DELETE /api/works/{id}?deleteFiles={bool}
 ```
+
+> ⚠️ **実装との乖離（P4監査で指摘）**: 本節はSoft Deleteと記載していたが、実装
+> （`WorkFileUseCase.DeleteWorkAsync`）はWork行・関連MetadataField/Asset/Job/EventLogを
+> **DBから物理削除**する。`deleteFiles=true`の場合はディスク上の物理ファイルも削除する
+> （ファイルがロック中で削除できない場合は`409 Conflict`を返し、DBは変更しない）。
+> Soft Delete化するかどうかは未決定の設計判断として残っている
+> （`Document/Architecture.md` §1.2 の注記も参照）。
 
 ## 2.6 カバー画像取得
 
@@ -207,45 +214,25 @@ GET /api/works/{id}/cover
 
 ## 2.7 Work Metadata再取得
 
+> ⚠️ **実装との乖離**: `POST /api/works/{id}/refresh-metadata` は存在しない。
+> 実際のエンドポイントは以下（`JobsController`、レスポンス形状も異なる）:
+
 ```
-POST /api/works/{id}/refresh-metadata
-```
+POST /api/jobs/fetchmetadata
+Body: { "workId": "uuid" }
+→ { "jobId": "uuid", "workId": "uuid", "message": "FetchMetadata job queued." }
 
-MetadataFetchJobを高優先度でキューに投入する。
-
-**レスポンス：**
-
-```json
-{
-  "jobId": "uuid",
-  "status": "queued"
-}
+POST /api/jobs/fetchmetadata/batch
+Body: { "workIds": ["uuid", ...] }
+→ { "queued": 3 }
 ```
 
 ## 2.8 Evidence一覧（Diagnostic）
 
-```
-GET /api/works/{id}/evidences
-```
-
-**レスポンス：**
-
-```json
-{
-  "items": [
-    {
-      "id": "uuid",
-      "strategy": "filename_match",
-      "score": 30,
-      "rawValue": "ABP-123",
-      "normalizedValue": "ABP-123",
-      "providerName": "FolderParser",
-      "createdAt": "..."
-    }
-  ],
-  "totalScore": 85
-}
-```
+> ⚠️ **未実装**: `GET /api/works/{id}/evidences` は存在しない。Evidence永続化自体が
+> 未実装のため（`Document/Architecture.md` §2.2 参照）。近い情報として
+> `GET /api/works/{id}` レスポンスの `Diagnostic` フィールド（Work作成イベントの
+> Payloadをパースしたもの、形状は不定）がある。
 
 ## 2.9 Viewer情報取得
 
@@ -279,31 +266,21 @@ GET /api/works/{id}/viewer-info
 
 # 3. Assets API
 
-## 3.1 Asset一覧（Work別）
+> ⚠️ **実装との乖離**: `GET /api/works/{workId}/assets`（Asset一覧単独取得）は存在しない。
+> Asset一覧は `GET /api/works/{id}` レスポンスの `Assets` フィールドに含まれる。
+> また配信エンドポイントは `stream`/`thumbnail` に分かれておらず、動画・画像・サムネイル
+> すべて単一のエンドポイントに統合されている。
+
+## 3.1 Assetファイル配信（統合エンドポイント）
 
 ```
-GET /api/works/{workId}/assets
+GET /api/assets/{id}/content
 ```
 
-**クエリパラメータ：**
-
-| パラメータ | 型 | 説明 |
-|---|---|---|
-| `role` | string | AssetRoleフィルタ（`video`, `cover_portrait`等） |
-
-## 3.2 Assetファイル配信（動画）
-
-```
-GET /api/assets/{id}/stream
-```
-
-**レスポンス：** `video/*` バイナリ（Range requests対応）
-
-## 3.3 Assetサムネイル
-
-```
-GET /api/assets/{id}/thumbnail
-```
+**レスポンス：** ファイルバイナリ（動画は`VideoStreamCache`によるRange Requests対応。
+先頭最大32MBをメモリキャッシュし、キャッシュヒット時は`206 Partial Content`をメモリから、
+ミス時は`PhysicalFile`でOSゼロコピー送信）。動画・カバー画像・サムネイル・サンプル画像等、
+全AssetTypeがこのエンドポイントで統一的に配信される。
 
 ---
 
@@ -708,31 +685,85 @@ POST /api/system/reindex-fts
 
 # 11. History（Event Log）API
 
-## 11.1 Work別Event履歴
+> ⚠️ **実装との乖離**: `GET /api/works/{id}/history`（Work別History単独取得）は存在しない。
+> Work別の履歴は `GET /api/works/{id}` レスポンスの `History` フィールドに含まれる
+> （`EventType`/`OccurredAt`/`Actor`/`Payload`）。全履歴の横断取得は以下：
 
 ```
-GET /api/works/{id}/history
-```
-
-**レスポンス：**
-
-```json
-{
-  "items": [
-    {
-      "id": "uuid",
-      "eventType": "MetadataUpdated",
-      "payload": { "field": "title", "old": "...", "new": "..." },
-      "actor": "fanza",
-      "occurredAt": "2026-06-28T10:00:00Z"
-    }
-  ]
-}
+GET /api/history          # 直近100件、TargetIdentifier解決済み（フロントの履歴画面が使用）
+GET /api/system/history?limit={n}   # 同等機能の別実装（フロント未使用、後方互換で維持）
+GET /api/system/history/count
+DELETE /api/system/history          # 履歴一括削除（設定ページ「メンテナンス」で使用）
 ```
 
 ---
 
-# 12. エラーコード一覧
+# 12. Duplicates API（未記載だった実装済みエンドポイント）
+
+## 12.1 重複グループ検出
+
+```
+GET /api/duplicates
+```
+
+品番（PrimaryIdentifier）完全一致、またはタイトル正規化一致で重複グループを検出して返す。
+`detectionType`: `"identifier"` または `"title"`。
+
+## 12.2 重複解消
+
+```
+POST /api/duplicates/resolve
+Body: {
+  "keepWorkId": "uuid",
+  "deleteWorkIds": ["uuid", ...],
+  "deleteFiles": false,
+  "mergeRating": true,
+  "mergeMemo": true,
+  "mergeUserTags": true,
+  "mergeFavorite": true
+}
+→ { "resolved": true, "filesDeleted": 0, "filesFailed": 0 }
+```
+
+`keepWorkId`を残し、`deleteWorkIds`を全て削除する（3件以上対応）。マージ系オプションが
+trueのフィールドについて、`keepWork`側が未設定の場合のみ`deleteWork`側の値を引き継ぐ
+（Favoriteのみ「どちらかがtrueならtrue」の論理和）。DB書き込み（マージ＋行削除）は
+単一トランザクションで全件成功/全件失敗を保証する。物理ファイル削除はDBコミット後の
+ベストエフォート。
+
+---
+
+# 13. Home API（未記載だった実装済みエンドポイント）
+
+```
+GET /api/home?deviceId={string}
+→ { "continueWatching": [...], "recentlyAdded": [...], "favorites": [...] }
+
+GET /api/home/random
+→ 単一のWorkアイテム（ランダム1件）
+```
+
+---
+
+# 14. Works API 追加エンドポイント（§2で未記載だった実装済みエンドポイント）
+
+```
+PATCH  /api/works/{id}/user-data          # Favorite/Rating/Memo更新
+PATCH  /api/works/{id}/metadata           # トリアージ用手動メタデータ上書き（ConfidenceScore=999）
+GET    /api/works/{id}/related?field=&limit=  # 関連作品（Actress/Series/Circle/Author/Maker一致）
+GET    /api/works/{id}/thumbnail-assets   # .thumbnails/配下のカバー候補一覧
+POST   /api/works/{id}/set-cover          # 既存アセットをカバーとして選択
+POST   /api/works/{id}/upload-cover       # 画像D&Dアップロード→カバー設定（multipart/form-data）
+POST   /api/works/{id}/open-folder        # ファイルの場所をエクスプローラーで開く（Windows専用）
+POST   /api/works/{id}/user-tags          # ユーザータグ追加
+DELETE /api/works/{id}/user-tags/{value}
+DELETE /api/works/{id}/genre-tags/{value} # ジャンルタグの個別削除（|区切り値から1件除去）
+GET    /api/works/{id}/epub               # EPUB配信
+```
+
+---
+
+# 15. エラーコード一覧
 
 | HTTPステータス | エラーコード | 説明 |
 |---|---|---|
@@ -747,7 +778,7 @@ GET /api/works/{id}/history
 
 ---
 
-# 13. 認証
+# 16. 認証
 
 WISE v2は認証なし（localhost限定のため）。将来のマルチユーザー対応時にJWT認証を追加する予定だが、APIの設計変更は最小限にとどめる。
 

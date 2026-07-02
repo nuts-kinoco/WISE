@@ -339,6 +339,20 @@ localStorage.setItem('wise-device-id', deviceId);
 
 # 11. Provider Pipeline（v2更新）
 
+> ⚠️ **本セクションは設計時点の構想であり、実際の実装（`MetadataService.CollectResultsAsync`）とは
+> フロー・用語ともに一致しない。実装は以下の「Tier制・二段階収集」方式である：**
+> - **Priorityによるグループ化**: `IMetadataProvider.Priority`（`appsettings.json`の`MetadataProviders`で設定）で
+>   降順にグループ化し、同一Priorityのグループを並列実行（下記sequenceDiagramの「MediaTypeで分岐」ではなく
+>   「Priority階層で分岐」）
+> - **Phase1（テキスト収集・早期終了あり）**: MediaTypeごとの「望ましいフィールド」（Video=Title/Actress/Maker、
+>   Comic=Title/Author/Circle等）が、これまで成功したProviderの`ProvidableFields`宣言から算出した
+>   「取得を待つ意味のあるフィールド」で揃った時点で早期終了する
+> - **Phase2（カバー画像フォールバック）**: Phase1が早期終了した場合のみ、カバー画像
+>   （`PortraitCover`/`LandscapeCover`）が未取得なら残りのPriority階層を追加実行する
+> - **カバー画質しきい値**: `FetchMetadataJobUseCase`内で125KB未満は低解像度/エラーページとして却下する
+>
+> 詳細は `Document/Metadata.md` の関連記述、および `MetadataService.cs` のコードコメントを参照。
+
 Metadata取得において、WorkのMediaTypeに応じたProviderのみを並列実行する。
 
 ```mermaid

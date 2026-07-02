@@ -75,6 +75,16 @@ classDiagram
 
 MetadataFieldのフィールド名は全MediaType共通の `METADATA_FIELD` テーブルに保存される。ただし実際に使用されるフィールドはMediaTypeによって異なる。
 
+> ⚠️ **既知の罠: FieldNameの大小文字不一致（実装の現実、下表のsnake_caseは設計上の理想形）**
+> 下表は設計時の命名規則（snake_case）を示すが、実際の実装ではProviderの種別によって大小文字が異なる：
+> - Video系Provider（Fanza/Mgs/JavBus/Fc2等）は PascalCase で保存する（例: `Actress`, `Maker`, `Title`）
+> - Comic系Provider（DoujinishiFilenameMetadataProvider/DLSiteMetadataProvider/FanzaMetadataProvider の同人経路）は
+>   小文字で保存する（例: `author`, `circle`）
+>
+> このためクライアント側（`WorkItemMapper` 等）は両方のケースにフォールバックする実装になっている。
+> 新しいProviderを追加する際は、既存の同じ論理フィールドを扱うProviderと大小文字を揃えること
+> （揃っていないとタグが重複表示される、または検索でヒットしない不具合の原因になる）。
+
 ### Video専用フィールド
 
 | field_name | 説明 | 例 |
@@ -155,20 +165,27 @@ interface IMetadataProvider
 
 ## 3.2 Provider一覧（v2更新）
 
+> ⚠️ **本表は設計時点の想定であり、実装（`src/WISE.Api/Program.cs` の DI 登録と
+> `appsettings.json` の `MetadataProviders` セクション）とは一致しない。**
+> `Melonbooks`/`NDL`/`FolderParser` は未実装。実際のPriority値・有効/無効設定は
+> `Program.cs`/`appsettings.json` を正とすること。また `Manual` は Priority ではなく
+> **ConfidenceScore=999**（`MetadataField` コンストラクタの第4引数）として実装されており、
+> Priority自体は他Providerと同様の整数値が使われる点も設計時点の記述と異なる。
+
 | Provider | SupportedMediaTypes | Priority | 概要 |
 |---|---|---|---|
-| `Manual` | All | 100 | ユーザー手動編集（最優先、絶対上書き不可） |
+| `Manual` | All | （ConfidenceScore=999） | ユーザー手動編集（最優先、絶対上書き不可） |
 | `FANZA` | Video | 80 | FANZA AV専用スクレイパー |
 | `JavBus` | Video | 70 | JavBus AV情報 |
 | `FC2` | Video | 70 | FC2 PPV情報 |
 | `AvWiki` | Video | 50 | AV女優Wiki |
 | `DLSite` | Comic, Book, PhotoBook, Audio | 80 | 同人誌・電子書籍 |
 | `Getchu` | Comic, Book | 70 | 美少女ゲーム/同人誌 |
-| `Melonbooks` | Comic, Book | 60 | 同人誌通販 |
-| `NDL` | Book | 70 | 国立国会図書館（書籍ISBN） |
+| `Melonbooks` | Comic, Book | 60 | 同人誌通販（未実装） |
+| `NDL` | Book | 70 | 国立国会図書館（書籍ISBN）（未実装） |
 | `LocalNFO` | All | 40 | ローカルのNFOファイル |
 | `ComicInfoXml` | Comic, Book | 45 | ComicInfo.xml（Kavita互換） |
-| `FolderParser` | All | 20 | フォルダ名・ファイル名からの推測 |
+| `FolderParser` | All | 20 | フォルダ名・ファイル名からの推測（未実装） |
 
 ## 3.3 ProviderManagerのMediaType絞り込み
 
@@ -237,7 +254,8 @@ stateDiagram-v2
 各 `MetadataField` の評価スコアは以下のように計算される：
 
 1. **基本優先度（Provider Priority）：** `PROVIDER.priority` の値（0〜100）
-2. **手動編集の絶対優先（Manual Override）：** Manualは常にPriority=100、他のProviderがいかに高Priorityでも上書き不可
+2. **手動編集の絶対優先（Manual Override）：** 実装上は Priority ではなく **ConfidenceScore=999**
+   （通常Providerは最大でも数十〜100程度）として付与され、他のProviderがいかに高スコアでも上書き不可
 3. **データ品質加点（Data Quality Bonus）：** 同一優先度の場合、データのリッチさで判断（あらすじの文字数、画像URL品質等）
 4. **取得日時（Freshness）：** 上記すべてが同点の場合、より新しい `fetched_at` を採用
 
