@@ -1,10 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
-using System;
+using System.Threading;
 using System.Threading.Tasks;
-using System.Linq;
-using Microsoft.EntityFrameworkCore;
-using WISE.Infrastructure.Data;
-using System.Collections.Generic;
+using WISE.Application.Queries;
 
 namespace WISE.Api.Controllers
 {
@@ -12,47 +9,17 @@ namespace WISE.Api.Controllers
     [Route("api/[controller]")]
     public class HistoryController : ControllerBase
     {
-        private readonly WiseDbContext _dbContext;
+        private readonly IHistoryQueryService _historyQuery;
 
-        public HistoryController(WiseDbContext dbContext)
+        public HistoryController(IHistoryQueryService historyQuery)
         {
-            _dbContext = dbContext;
-        }
-
-        public class HistoryDto
-        {
-            public Guid Id { get; set; }
-            public string EventType { get; set; } = string.Empty;
-            public string Actor { get; set; } = string.Empty;
-            public string Source { get; set; } = string.Empty;
-            public string? Payload { get; set; }
-            public Guid? TargetId { get; set; }
-            public string? TargetIdentifier { get; set; } // E.g., Work identifier
-            public DateTime OccurredAt { get; set; }
+            _historyQuery = historyQuery;
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetHistory()
+        public async Task<IActionResult> GetHistory(CancellationToken ct)
         {
-            var eventLogs = await _dbContext.EventLogs
-                .AsNoTracking()
-                .Include(e => e.TargetWork)
-                .OrderByDescending(e => e.OccurredAt)
-                .Take(100)
-                .ToListAsync();
-
-            var history = eventLogs.Select(e => new HistoryDto
-            {
-                Id = e.Id,
-                EventType = e.EventType,
-                Actor = e.Actor,
-                Source = e.Source,
-                Payload = e.Payload,
-                TargetId = e.TargetId,
-                TargetIdentifier = e.TargetWork?.PrimaryIdentifier,
-                OccurredAt = e.OccurredAt
-            }).ToList();
-
+            var history = await _historyQuery.GetRecentHistoryAsync(100, ct);
             return Ok(history);
         }
     }

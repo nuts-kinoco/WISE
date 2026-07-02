@@ -1,9 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
+using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore;
-using WISE.Domain.Entities;
-using WISE.Infrastructure.Data;
-using System.Linq;
+using WISE.Api.UseCases;
 
 namespace WISE.Api.Controllers
 {
@@ -11,17 +9,17 @@ namespace WISE.Api.Controllers
     [Route("api/[controller]")]
     public class WatchFoldersController : ControllerBase
     {
-        private readonly WiseDbContext _dbContext;
+        private readonly WatchFolderUseCase _useCase;
 
-        public WatchFoldersController(WiseDbContext dbContext)
+        public WatchFoldersController(WatchFolderUseCase useCase)
         {
-            _dbContext = dbContext;
+            _useCase = useCase;
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetAll()
+        public async Task<IActionResult> GetAll(CancellationToken ct)
         {
-            var folders = await _dbContext.WatchFolders.AsNoTracking().OrderByDescending(w => w.CreatedAt).ToListAsync();
+            var folders = await _useCase.GetAllAsync(ct);
             return Ok(folders);
         }
 
@@ -31,49 +29,27 @@ namespace WISE.Api.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> Create([FromBody] CreateWatchFolderRequest request)
+        public async Task<IActionResult> Create([FromBody] CreateWatchFolderRequest request, CancellationToken ct)
         {
-            if (string.IsNullOrWhiteSpace(request.Path))
-                return BadRequest("Path is required.");
+            var (success, error, created) = await _useCase.CreateAsync(request.Path, ct);
+            if (!success)
+                return error == "Watch folder already exists." ? Conflict(error) : BadRequest(error);
 
-            if (await _dbContext.WatchFolders.AnyAsync(w => w.Path == request.Path))
-                return Conflict("Watch folder already exists.");
-
-            var watchFolder = new WatchFolder(request.Path);
-            _dbContext.WatchFolders.Add(watchFolder);
-            await _dbContext.SaveChangesAsync();
-
-            return CreatedAtAction(nameof(GetAll), new { id = watchFolder.Id }, watchFolder);
+            return CreatedAtAction(nameof(GetAll), new { id = created!.Id }, created);
         }
 
         [HttpDelete("{id}")]
-        public async Task<IActionResult> Delete(System.Guid id)
+        public async Task<IActionResult> Delete(System.Guid id, CancellationToken ct)
         {
-            var folder = await _dbContext.WatchFolders.FindAsync(id);
-            if (folder == null)
-                return NotFound();
-
-            _dbContext.WatchFolders.Remove(folder);
-            await _dbContext.SaveChangesAsync();
-
-            return NoContent();
+            var deleted = await _useCase.DeleteAsync(id, ct);
+            return deleted ? NoContent() : NotFound();
         }
 
         [HttpPatch("{id}/toggle")]
-        public async Task<IActionResult> Toggle(System.Guid id)
+        public async Task<IActionResult> Toggle(System.Guid id, CancellationToken ct)
         {
-            var folder = await _dbContext.WatchFolders.FindAsync(id);
-            if (folder == null)
-                return NotFound();
-
-            if (folder.IsEnabled)
-                folder.Disable();
-            else
-                folder.Enable();
-
-            await _dbContext.SaveChangesAsync();
-
-            return Ok(folder);
+            var folder = await _useCase.ToggleAsync(id, ct);
+            return folder == null ? NotFound() : Ok(folder);
         }
     }
 }
