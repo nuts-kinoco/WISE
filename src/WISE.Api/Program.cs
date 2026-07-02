@@ -172,9 +172,11 @@ builder.Services.AddScoped<ICoverCacheRepository, WISE.Infrastructure.Data.Repos
 builder.Services.AddScoped<IDisplayProfileRepository, WISE.Infrastructure.Data.Repositories.DisplayProfileRepository>();
 builder.Services.AddScoped<WISE.Domain.SeedWork.IUnitOfWork>(sp => sp.GetRequiredService<WiseDbContext>());
 
-// P1リファクタリング（DbContext直接注入の是正 Phase1）: Query Service / UseCase
+// P1リファクタリング（DbContext直接注入の是正）: Query Service / UseCase / Repository
 builder.Services.AddScoped<WISE.Application.Queries.IHistoryQueryService, WISE.Infrastructure.Data.Queries.HistoryQueryService>();
+builder.Services.AddScoped<WISE.Application.Queries.IHomeQueryService, WISE.Infrastructure.Data.Queries.HomeQueryService>();
 builder.Services.AddScoped<WISE.Api.UseCases.WatchFolderUseCase>();
+builder.Services.AddScoped<IAppSettingsRepository, WISE.Infrastructure.Data.Repositories.AppSettingsRepository>();
 
 // Archive readers
 builder.Services.AddScoped<IArchiveReader, ZipArchiveReader>();

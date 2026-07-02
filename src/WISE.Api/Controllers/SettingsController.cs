@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -8,7 +7,6 @@ using System.Threading.Tasks;
 using WISE.Domain.Entities;
 using WISE.Domain.Enums;
 using WISE.Domain.Interfaces;
-using WISE.Infrastructure.Data;
 
 namespace WISE.Api.Controllers;
 
@@ -16,12 +14,12 @@ namespace WISE.Api.Controllers;
 [Route("api/[controller]")]
 public class SettingsController : ControllerBase
 {
-    private readonly WiseDbContext _db;
+    private readonly IAppSettingsRepository _appSettings;
     private readonly IDisplayProfileRepository _profiles;
 
-    public SettingsController(WiseDbContext db, IDisplayProfileRepository profiles)
+    public SettingsController(IAppSettingsRepository appSettings, IDisplayProfileRepository profiles)
     {
-        _db = db;
+        _appSettings = appSettings;
         _profiles = profiles;
     }
 
@@ -34,7 +32,7 @@ public class SettingsController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetAll(CancellationToken ct)
     {
-        var stored = await _db.AppSettings.AsNoTracking().ToDictionaryAsync(s => s.Key, s => s.Value, ct);
+        var stored = await _appSettings.GetAllAsync(ct);
 
         var result = Defaults
             .Select(kv => new
@@ -53,7 +51,7 @@ public class SettingsController : ControllerBase
         if (!Defaults.ContainsKey(key))
             return NotFound(new { error = $"Unknown setting key: {key}" });
 
-        var stored = await _db.AppSettings.FindAsync(new object[] { key }, ct);
+        var stored = await _appSettings.GetAsync(key, ct);
         var value  = stored?.Value ?? Defaults[key];
         return Ok(new { key, value });
     }
@@ -150,18 +148,7 @@ public class SettingsController : ControllerBase
         if (!Defaults.ContainsKey(key))
             return NotFound(new { error = $"Unknown setting key: {key}" });
 
-        var existing = await _db.AppSettings.FindAsync(new object[] { key }, ct);
-        if (existing is null)
-        {
-            _db.AppSettings.Add(new AppSetting(key, dto.Value));
-        }
-        else
-        {
-            // FindAsync で取得済み＝追跡中のため、SetValue の変更検知だけで保存される
-            existing.SetValue(dto.Value);
-        }
-
-        await _db.SaveChangesAsync(ct);
+        await _appSettings.SetAsync(key, dto.Value, ct);
         return Ok(new { key, value = dto.Value });
     }
 }
