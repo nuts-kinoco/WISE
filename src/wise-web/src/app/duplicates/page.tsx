@@ -29,13 +29,14 @@ interface GroupState {
   mergeRating: boolean;
   mergeMemo: boolean;
   mergeUserTags: boolean;
+  mergeFavorite: boolean;
   resolving: boolean;
   resolved: boolean;
   error: string | null;
 }
 
 function hasUserData(work: DuplicateWork): boolean {
-  return work.rating !== null || (work.userMemo !== null && work.userMemo.trim() !== "");
+  return work.favorite || work.rating !== null || (work.userMemo !== null && work.userMemo.trim() !== "");
 }
 
 export default function DuplicatesPage() {
@@ -61,6 +62,7 @@ export default function DuplicatesPage() {
           mergeRating: anyHasUserData,
           mergeMemo: anyHasUserData,
           mergeUserTags: anyHasUserData,
+          mergeFavorite: anyHasUserData,
           resolving: false,
           resolved: false,
           error: null,
@@ -103,6 +105,7 @@ export default function DuplicatesPage() {
         mergeRating: state.mergeRating,
         mergeMemo: state.mergeMemo,
         mergeUserTags: state.mergeUserTags,
+        mergeFavorite: state.mergeFavorite,
       });
       updateGroupState(group.identifier, { resolving: false, resolved: true });
     } catch (e) {
@@ -265,6 +268,17 @@ export default function DuplicatesPage() {
                 {/* Merge options */}
                 {anyUserData && (
                   <div className="flex flex-wrap gap-4 text-sm pt-1 border-t">
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={state.mergeFavorite}
+                        onChange={(e) =>
+                          updateGroupState(group.identifier, { mergeFavorite: e.target.checked })
+                        }
+                        className="accent-primary"
+                      />
+                      <span className="text-muted-foreground">お気に入りをマージ</span>
+                    </label>
                     <label className="flex items-center gap-2 cursor-pointer select-none">
                       <input
                         type="checkbox"

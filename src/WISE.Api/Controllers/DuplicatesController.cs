@@ -139,7 +139,8 @@ namespace WISE.Api.Controllers
             bool DeleteFiles,
             bool MergeRating,
             bool MergeMemo,
-            bool MergeUserTags
+            bool MergeUserTags,
+            bool MergeFavorite
         );
 
         /// <summary>
@@ -171,6 +172,10 @@ namespace WISE.Api.Controllers
                 // Rating: keepWork が null の場合のみ引き継ぐ
                 if (req.MergeRating && keepWork.Rating == null && deleteWork.Rating != null)
                     keepWork.SetRating(deleteWork.Rating);
+
+                // Favorite: 削除される側が true なら引き継ぐ（片方でもお気に入りなら残す）
+                if (req.MergeFavorite && !keepWork.Favorite && deleteWork.Favorite)
+                    keepWork.SetFavorite(true);
 
                 // Memo: keepWork が空の場合のみ引き継ぐ
                 if (req.MergeMemo)

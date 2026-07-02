@@ -81,11 +81,21 @@ public class Work : Entity, IAggregateRoot
             field.SetPrimary(false);
         }
 
+        // (FieldName, ProviderId) だけでは一意にならないケースがある
+        // （例: 複数女優作品の ActressTag は同一 Provider="System" から複数件生成される）。
+        // Value も含めて照合し、今回のスキャンで再現されなかった同グループの古い値は除去する
+        // （でないと、複数候補が同じ既存レコードに次々上書きされ、最後の1件しか残らない）。
+        var touchedGroups = new HashSet<(string FieldName, string ProviderId)>();
+        var touchedKeys = new HashSet<(string FieldName, string ProviderId, string Value)>();
+
         foreach (var resolved in resolvedCandidates)
         {
             var candidate = resolved.Candidate;
-            var existingField = _metadataFields.FirstOrDefault(m => 
-                m.FieldName == candidate.FieldName && m.ProviderId == candidate.ProviderId);
+            touchedGroups.Add((candidate.FieldName, candidate.ProviderId));
+            touchedKeys.Add((candidate.FieldName, candidate.ProviderId, candidate.Value));
+
+            var existingField = _metadataFields.FirstOrDefault(m =>
+                m.FieldName == candidate.FieldName && m.ProviderId == candidate.ProviderId && m.Value == candidate.Value);
 
             if (existingField != null)
             {
@@ -95,14 +105,22 @@ public class Work : Entity, IAggregateRoot
             else
             {
                 var newField = new MetadataField(
-                    candidate.FieldName, 
-                    candidate.Value, 
-                    candidate.ProviderId, 
-                    resolved.IsPrimary, 
+                    candidate.FieldName,
+                    candidate.Value,
+                    candidate.ProviderId,
+                    resolved.IsPrimary,
                     candidate.Confidence);
                 _metadataFields.Add(newField);
             }
         }
+
+        // 今回のスキャンで再訪した (FieldName, ProviderId) グループのうち、
+        // 新しい候補値セットに含まれなくなった古いレコードを削除する
+        // （例: 女優が入れ替わった、または人数が減った場合の残骸行）
+        var stale = _metadataFields.Where(m =>
+            touchedGroups.Contains((m.FieldName, m.ProviderId)) &&
+            !touchedKeys.Contains((m.FieldName, m.ProviderId, m.Value))).ToList();
+        foreach (var s in stale) _metadataFields.Remove(s);
 
         // Primary保証: 各FieldNameで1つもprimaryが無ければ、最高ConfidenceScoreのものをprimaryにする
         var fieldNames = _metadataFields.Select(m => m.FieldName).Distinct();

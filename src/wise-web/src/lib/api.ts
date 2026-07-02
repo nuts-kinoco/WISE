@@ -502,6 +502,7 @@ export async function resolveDuplicate(params: {
   mergeRating: boolean;
   mergeMemo: boolean;
   mergeUserTags: boolean;
+  mergeFavorite: boolean;
 }): Promise<void> {
   const res = await fetch(`${API_BASE_URL}/duplicates/resolve`, {
     method: 'POST',

@@ -110,45 +110,10 @@ namespace WISE.Api.Controllers
                 .Take(pageSize)
                 .ToListAsync();
 
-            var works = rawWorks.Select(w =>
-            {
-                string? MetaFirst(params string[] names)
-                {
-                    foreach (var name in names)
-                    {
-                        var v = w.MetadataFields.FirstOrDefault(m => m.FieldName == name && m.IsPrimary)?.Value
-                             ?? w.MetadataFields.FirstOrDefault(m => m.FieldName == name)?.Value;
-                        if (v != null) return v;
-                    }
-                    return null;
-                }
-
-                return new
-                {
-                    w.Id,
-                    w.PrimaryIdentifier,
-                    MediaType = w.MediaType.ToString(),
-                    Title       = MetaFirst("Title"),
-                    Actress     = MetaFirst("Actress", "actress"),
-                    Maker       = MetaFirst("Maker", "maker"),
-                    Label       = MetaFirst("Label", "label"),
-                    ReleaseDate = MetaFirst("ReleaseDate", "release_date"),
-                    // Comic-specific
-                    Author      = MetaFirst("author", "Author", "Writer"),
-                    Circle      = MetaFirst("circle", "Circle"),
-                    PageCount   = MetaFirst("page_count", "PageCount"),
-                    Language    = MetaFirst("language", "Language", "LanguageISO"),
-                    CoverUrl = ResolveMediaUrl(
-                        MetaFirst("PortraitCover", "Cover") ?? $"/api/works/{w.Id}/cover",
-                        w.Assets),
-                    CoverLandscapeUrl = ResolveMediaUrl(
-                        MetaFirst("LandscapeCover", "CoverLandscape"),
-                        w.Assets),
-                    MetadataStatus = w.Status.ToString(),
-                    w.Favorite,
-                    w.Rating
-                };
-            }).ToList();
+            // WorkItemMapper.Map と同一のロジックを使用する（ActressTag 優先処理を含む）。
+            // 以前この一覧エンドポイントは独自の簡易マッピングを持っており、複数女優作品の
+            // ActressTag フォールバックが適用されず「ライブラリで女優名が空になる」不具合があった。
+            var works = rawWorks.Select(WorkItemMapper.Map).ToList();
 
             return Ok(new
             {
