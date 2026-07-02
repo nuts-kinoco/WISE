@@ -245,6 +245,8 @@ export default function WorkDetailPage({ params }: { params: Promise<{ id: strin
   const label = getMeta("Label");
   const releaseDate = getMeta("ReleaseDate");
   const runtime = getMeta("Runtime");
+  const authors = [...new Set([...getMetaAll("Author"), ...getMetaAll("author")])].filter(Boolean);
+  const circle = getMeta("Circle") ?? getMeta("circle");
   // Genres are stored as |-joined string (to avoid multi-value dedup in backend)
   const genres = getMetaAll("Genre").flatMap(g => g.split("|").map(s => s.trim()).filter(Boolean))
     || work.metadata.filter(m => m.fieldName === "Genre").flatMap(m => m.value.split("|").map(s => s.trim()).filter(Boolean));
@@ -628,6 +630,24 @@ export default function WorkDetailPage({ params }: { params: Promise<{ id: strin
                   <InfoBlock icon={<Tag className="w-4 h-4 text-pink-400" />} label="出演者">
                     <div className="flex flex-wrap gap-1.5">
                       {actress.map((a, i) => (
+                        <button key={i} onClick={() => filterBy(a)} className="text-sm bg-pink-500/10 text-pink-300 border border-pink-500/20 px-2.5 py-0.5 rounded-full hover:bg-pink-500/25 transition-colors cursor-pointer">
+                          {a}
+                        </button>
+                      ))}
+                    </div>
+                  </InfoBlock>
+                )}
+
+                {circle && (
+                  <InfoBlock icon={<Building2 className="w-4 h-4 text-blue-400" />} label="サークル">
+                    <button onClick={() => filterBy(circle)} className="text-sm font-medium hover:text-blue-400 transition-colors text-left cursor-pointer">{circle}</button>
+                  </InfoBlock>
+                )}
+
+                {authors.length > 0 && (
+                  <InfoBlock icon={<Tag className="w-4 h-4 text-pink-400" />} label="作者">
+                    <div className="flex flex-wrap gap-1.5">
+                      {authors.map((a, i) => (
                         <button key={i} onClick={() => filterBy(a)} className="text-sm bg-pink-500/10 text-pink-300 border border-pink-500/20 px-2.5 py-0.5 rounded-full hover:bg-pink-500/25 transition-colors cursor-pointer">
                           {a}
                         </button>
@@ -1091,6 +1111,10 @@ function VideoPlayer({ src, assetId, filename }: { src: string; assetId: string;
   const [duration, setDuration] = useState(0);
   const storageKey = `wise-video-pos-${assetId}`;
 
+  // キャッシュ設定に応じて preload 挙動を切り替え（256MB未満 → metadata のみ、以上 → auto）
+  const videoCacheMb = parseInt(localStorage.getItem("wise_video_cache_mb") ?? "1024", 10);
+  const preloadMode = videoCacheMb >= 256 ? "auto" : "metadata";
+
   const handleLoadedMetadata = () => {
     const el = videoRef.current;
     if (!el) return;
@@ -1120,7 +1144,7 @@ function VideoPlayer({ src, assetId, filename }: { src: string; assetId: string;
         controls
         className="w-full rounded-xl shadow-xl bg-black aspect-video"
         src={src}
-        preload="metadata"
+        preload={preloadMode}
         onLoadedMetadata={handleLoadedMetadata}
         onTimeUpdate={handleTimeUpdate}
       />

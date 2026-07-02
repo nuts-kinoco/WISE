@@ -33,7 +33,7 @@ public class AvWikiMetadataProvider : IMetadataProvider
     }
 
     public string ProviderId => "AvWiki";
-    public int Priority => 60; // Fanza=80, Mgs=70 より低いため補完用途
+    public int Priority => 30; // Tier4: AdultWiki と並列実行
     public IReadOnlySet<MediaType>? SupportedMediaTypes => new HashSet<MediaType> { MediaType.Video };
 
     public async Task<MetadataResult> FetchAsync(MetadataProviderContext context)

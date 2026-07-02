@@ -67,6 +67,11 @@ export default function Home() {
 
   useEffect(() => setMounted(true), []);
 
+  // 検索クエリがあるときはライブラリビューに自動切り替え
+  useEffect(() => {
+    if (searchQuery) setMainView("library");
+  }, [searchQuery]);
+
   const closePanel = useCallback(() => setShowDisplayPanel(false), []);
 
   return (

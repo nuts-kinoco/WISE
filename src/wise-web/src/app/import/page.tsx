@@ -37,7 +37,7 @@ interface JobProgress {
 export default function ImportPage() {
   const [watchFolders, setWatchFolders] = useState<WatchFolder[]>([]);
   const [newWatchFolderPath, setNewWatchFolderPath] = useState("");
-  
+
   const [inputDirectory, setInputDirectory] = useState("");
   const [outputDirectory, setOutputDirectory] = useState("D:\\WISE_Library");
   const [importMode, setImportMode] = useState<"Move" | "Copy">("Copy");

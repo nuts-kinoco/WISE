@@ -24,7 +24,7 @@ public class JavBusMetadataProvider : IMetadataProvider
         ILogger<JavBusMetadataProvider> logger)
     {
         _httpClient = httpClient;
-        _options = options.Get("JavBus") ?? new MetadataProviderOptions { Priority = 50 };
+        _options = options.Get("JavBus") ?? new MetadataProviderOptions { Priority = 60 };
         _logger = logger;
     }
 
@@ -101,7 +101,7 @@ public class JavBusMetadataProvider : IMetadataProvider
             var coverUrl = coverNode?.GetAttributeValue("src", string.Empty);
             if (!string.IsNullOrEmpty(coverUrl))
             {
-                results.Add(new MetadataCandidate(ProviderId, "Cover", coverUrl, 80, Priority, SourceUrl: url));
+                results.Add(new MetadataCandidate(ProviderId, "PortraitCover", coverUrl, 80, Priority, SourceUrl: url));
                 _logger.LogInformation("[JavBus] Cover={CoverUrl}", coverUrl);
             }
 

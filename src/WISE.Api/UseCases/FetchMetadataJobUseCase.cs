@@ -172,7 +172,7 @@ public class FetchMetadataJobUseCase
         // 3. Download PortraitCover / LandscapeCover from remote URLs to local disk
         //    複数候補を信頼度順に試し、最小解像度(MinCoverFileSizeBytes)を満たす最初のURLを採用する。
         //    Store /api/assets/{id}/content URL in MetadataField (not local path) so frontend uses directly.
-        const int MinCoverFileSizeBytes = 8_000; // 8KB 未満は低解像度・404エラーページとして却下
+        const int MinCoverFileSizeBytes = 125_000; // 125KB 未満は低解像度・404エラーページとして却下
         var coverFields = new[] { "PortraitCover", "LandscapeCover" };
         var coverDir = DetermineWorkDirectory(work);
         if (coverDir != null)

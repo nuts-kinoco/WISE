@@ -155,7 +155,7 @@ public class JavLibraryMetadataProvider : IMetadataProvider
         if (!string.IsNullOrEmpty(coverSrc))
         {
             var coverUrl = coverSrc.StartsWith("//") ? "https:" + coverSrc : coverSrc;
-            results.Add(new MetadataCandidate(ProviderId, "Cover", coverUrl, 75, Priority, SourceUrl: url));
+            results.Add(new MetadataCandidate(ProviderId, "PortraitCover", coverUrl, 75, Priority, SourceUrl: url));
         }
 
         AddInfoField(doc, results, "video_date",      "ReleaseDate", url);

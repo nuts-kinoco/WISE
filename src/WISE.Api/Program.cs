@@ -29,6 +29,11 @@ builder.Services.AddMemoryCache(options =>
     // 512MB 上限。各エントリが Size=bytes を報告することで上限が機能する。
     options.SizeLimit = 512L * 1024 * 1024;
 });
+// Video stream cache
+builder.Services.Configure<WISE.Infrastructure.Services.VideoCacheOptions>(
+    builder.Configuration.GetSection("VideoCache"));
+builder.Services.AddSingleton<WISE.Infrastructure.Services.VideoStreamCache>();
+
 // Register UseCases and Services
 builder.Services.AddScoped<ImportUseCase>();
 builder.Services.AddScoped<CreateImportJobUseCase>();
@@ -213,8 +218,13 @@ using (var scope = app.Services.CreateAsyncScope())
     dbContext.Database.ExecuteSqlRaw("PRAGMA journal_mode=WAL;");
     dbContext.Database.ExecuteSqlRaw(@"
         CREATE VIRTUAL TABLE IF NOT EXISTS METADATA_FIELD_FTS
-        USING fts5(value, content=METADATA_FIELD, content_rowid=id,
+        USING fts5(value, content=MetadataFields, content_rowid=Id,
                    tokenize='unicode61 remove_diacritics 1');");
+    // 前回の起動で中断されたジョブをリセット
+    dbContext.Database.ExecuteSqlRaw(@"
+        UPDATE Jobs
+        SET Status = 4, FinishedAt = datetime('now'), ErrorMessage = 'Interrupted (server restart)'
+        WHERE Status IN (1, 2);");
     await DisplayProfileSeeder.SeedAsync(dbContext);
 }
 

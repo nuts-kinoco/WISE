@@ -1,7 +1,7 @@
 "use client";
 
 import { useGalleryStore } from "@/store/useGalleryStore";
-import { ArrowLeft, Monitor, Moon, Sun, Settings2, Globe, Image, Trash2, Cookie, CheckCircle2, AlertCircle, BookOpen } from "lucide-react";
+import { ArrowLeft, Monitor, Moon, Sun, Settings2, Globe, Image, Trash2, Cookie, CheckCircle2, AlertCircle, BookOpen, Film } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { fetchSettings, patchSetting, clearHistory, clearFinishedJobs } from "@/lib/api";
@@ -42,6 +42,9 @@ export default function SettingsPage() {
   const [readerResizeFilter, setReaderResizeFilterState] = useState("bilinear");
   const [readerImageFilter, setReaderImageFilterState] = useState("none");
 
+  // Video settings state (persisted in localStorage)
+  const [videoCacheMb, setVideoCacheMbState] = useState(1024);
+
   const setReaderCacheMb = (v: number) => {
     setReaderCacheMbState(v);
     localStorage.setItem("wise_reader_cache_mb", String(v));
@@ -53,6 +56,11 @@ export default function SettingsPage() {
   const setReaderImageFilter = (v: string) => {
     setReaderImageFilterState(v);
     localStorage.setItem("wise_reader_image_filter", v);
+  };
+
+  const setVideoCacheMb = (v: number) => {
+    setVideoCacheMbState(v);
+    localStorage.setItem("wise_video_cache_mb", String(v));
   };
 
   // MGS Cookie state
@@ -123,6 +131,9 @@ export default function SettingsPage() {
     if (rf) setReaderResizeFilterState(rf);
     const imf = localStorage.getItem("wise_reader_image_filter");
     if (imf) setReaderImageFilterState(imf);
+    // Load video settings from localStorage
+    const vmb = parseInt(localStorage.getItem("wise_video_cache_mb") ?? "1024", 10);
+    if (Number.isFinite(vmb) && vmb > 0) setVideoCacheMbState(vmb);
   }, []);
 
   const handleSaveFc2Cookie = async () => {
@@ -421,21 +432,18 @@ export default function SettingsPage() {
                   <p className="font-medium">キャッシュメモリ</p>
                   <p className="text-sm text-muted-foreground mt-0.5">先読みページ数の目安（10MB/ページ換算）</p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    min={64}
-                    max={4096}
-                    step={64}
-                    value={readerCacheMb}
-                    onChange={(e) => {
-                      const v = parseInt(e.target.value, 10);
-                      if (Number.isFinite(v) && v >= 64) setReaderCacheMb(v);
-                    }}
-                    className="w-20 rounded-lg border bg-background px-2 py-1 text-sm text-right focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                  <span className="text-sm text-muted-foreground">MB</span>
-                </div>
+                <select
+                  value={readerCacheMb}
+                  onChange={(e) => setReaderCacheMb(parseInt(e.target.value, 10))}
+                  className="rounded-lg border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value={256}>256 MB</option>
+                  <option value={512}>512 MB</option>
+                  <option value={1024}>1024 MB</option>
+                  <option value={2048}>2048 MB</option>
+                  <option value={3072}>3072 MB</option>
+                  <option value={4096}>4096 MB</option>
+                </select>
               </div>
               {/* Resize filter */}
               <div className="flex items-center justify-between p-4">
@@ -472,6 +480,36 @@ export default function SettingsPage() {
             </div>
             <p className="text-xs text-muted-foreground">
               設定はブラウザに保存されます。リーダー内の設定パネルからも変更できます。
+            </p>
+          </section>
+
+          {/* Video Settings */}
+          <section className="space-y-4 pt-4">
+            <h2 className="text-xl font-semibold border-b pb-2 flex items-center gap-2">
+              <Film className="w-5 h-5" /> ビデオ設定
+            </h2>
+            <div className="bg-card border rounded-xl overflow-hidden">
+              <div className="flex items-center justify-between p-4">
+                <div>
+                  <p className="font-medium">キャッシュメモリ</p>
+                  <p className="text-sm text-muted-foreground mt-0.5">ビデオの先読みバッファ上限</p>
+                </div>
+                <select
+                  value={videoCacheMb}
+                  onChange={(e) => setVideoCacheMb(parseInt(e.target.value, 10))}
+                  className="rounded-lg border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value={256}>256 MB</option>
+                  <option value={512}>512 MB</option>
+                  <option value={1024}>1024 MB</option>
+                  <option value={2048}>2048 MB</option>
+                  <option value={3072}>3072 MB</option>
+                  <option value={4096}>4096 MB</option>
+                </select>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              設定はブラウザに保存されます。再生時のシーク速度や先読み量に影響します。
             </p>
           </section>
 

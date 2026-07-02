@@ -35,7 +35,14 @@ internal static class WorkItemMapper
             w.PrimaryIdentifier,
             MediaType       = w.MediaType.ToString(),
             Title           = MetaFirst("Title"),
-            Actress         = MetaFirst("Actress", "actress"),
+            // 1名: Actress、複数: ActressTag（Actress は空文字マーカー）
+            Actress         = w.MetadataFields
+                                .Where(m => m.FieldName == "ActressTag")
+                                .Select(m => m.Value)
+                                .Where(v => !string.IsNullOrWhiteSpace(v))
+                                .ToList() is { Count: > 0 } tags
+                                    ? string.Join(" / ", tags)
+                                    : MetaFirst("Actress", "actress"),
             Maker           = MetaFirst("Maker", "maker"),
             Label           = MetaFirst("Label", "label"),
             ReleaseDate     = MetaFirst("ReleaseDate", "release_date"),

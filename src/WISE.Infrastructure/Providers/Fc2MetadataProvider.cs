@@ -44,6 +44,10 @@ public class Fc2MetadataProvider : IMetadataProvider
     public int Priority => _options.Priority;
     public IReadOnlySet<MediaType>? SupportedMediaTypes => new HashSet<MediaType> { MediaType.Video };
 
+    // FC2-PPV-XXXXXXX 形式の識別子のみ処理する
+    public bool CanHandle(string identifier) =>
+        Regex.IsMatch(identifier, @"^FC2", RegexOptions.IgnoreCase);
+
     private static readonly string[] NotFoundPhrases =
     {
         "申し訳ありません、お探しの商品が見つかりませんでした",

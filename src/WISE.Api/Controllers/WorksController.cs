@@ -74,11 +74,13 @@ namespace WISE.Api.Controllers
                 var lowerQ = q.ToLower();
                 query = query.Where(w =>
                     (w.PrimaryIdentifier != null && w.PrimaryIdentifier.ToLower().Contains(lowerQ)) ||
-                    w.MetadataFields.Any(m => m.FieldName == "Title" && m.Value != null && m.Value.ToLower().Contains(lowerQ)) ||
-                    w.MetadataFields.Any(m => m.FieldName == "Maker" && m.Value != null && m.Value.ToLower().Contains(lowerQ)) ||
-                    w.MetadataFields.Any(m => m.FieldName == "Actress" && m.Value != null && m.Value.ToLower().Contains(lowerQ)) ||
-                    w.MetadataFields.Any(m => m.FieldName == "Label" && m.Value != null && m.Value.ToLower().Contains(lowerQ)) ||
-                    w.MetadataFields.Any(m => m.FieldName == "Genre" && m.Value != null && m.Value.ToLower().Contains(lowerQ))
+                    w.MetadataFields.Any(m => m.FieldName == "Title"      && m.Value != null && m.Value.ToLower().Contains(lowerQ)) ||
+                    w.MetadataFields.Any(m => m.FieldName == "Maker"      && m.Value != null && m.Value.ToLower().Contains(lowerQ)) ||
+                    w.MetadataFields.Any(m => m.FieldName == "Actress"    && m.Value != null && m.Value.ToLower().Contains(lowerQ)) ||
+                    w.MetadataFields.Any(m => m.FieldName == "ActressTag" && m.Value != null && m.Value.ToLower().Contains(lowerQ)) ||
+                    w.MetadataFields.Any(m => m.FieldName == "Label"      && m.Value != null && m.Value.ToLower().Contains(lowerQ)) ||
+                    w.MetadataFields.Any(m => m.FieldName == "Genre"      && m.Value != null && m.Value.ToLower().Contains(lowerQ)) ||
+                    w.MetadataFields.Any(m => m.FieldName == "Tag"        && m.Value != null && m.Value.ToLower().Contains(lowerQ))
                 );
             }
 
@@ -537,17 +539,33 @@ namespace WISE.Api.Controllers
             var work = await _dbContext.Works.Include(w => w.Assets).FirstOrDefaultAsync(w => w.Id == workId);
             if (work == null) return NotFound();
 
+            string? pathToOpen = null;
+
+            // ビデオファイルを優先
             var videoAsset = work.Assets.FirstOrDefault(a =>
                 a.FilePath != null && (a.FilePath.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase)
                                     || a.FilePath.EndsWith(".mkv", StringComparison.OrdinalIgnoreCase)));
-            var path = videoAsset?.FilePath;
-            if (string.IsNullOrEmpty(path) || !System.IO.File.Exists(path))
-                return NotFound(new { Error = "Video file not found on disk." });
+            if (videoAsset?.FilePath != null && System.IO.File.Exists(videoAsset.FilePath))
+            {
+                pathToOpen = videoAsset.FilePath;
+            }
+            else
+            {
+                // ビデオがない場合は任意のアセットを探す
+                var anyAsset = work.Assets.FirstOrDefault(a => !string.IsNullOrEmpty(a.FilePath));
+                if (anyAsset?.FilePath != null && System.IO.File.Exists(anyAsset.FilePath))
+                {
+                    pathToOpen = anyAsset.FilePath;
+                }
+            }
+
+            if (string.IsNullOrEmpty(pathToOpen))
+                return NotFound(new { Error = "No accessible files found." });
 
             try
             {
-                System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{path}\"");
-                return Ok(new { path });
+                System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{pathToOpen}\"");
+                return Ok(new { path = pathToOpen });
             }
             catch (Exception ex)
             {

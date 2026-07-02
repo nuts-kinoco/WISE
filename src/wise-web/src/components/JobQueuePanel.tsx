@@ -35,6 +35,7 @@ export function useActiveJobs() {
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
+    let hideTimer: ReturnType<typeof setTimeout>;
 
     const poll = async () => {
       try {
@@ -42,15 +43,23 @@ export function useActiveJobs() {
         if (res.ok) {
           const data: ActiveJob[] = await res.json();
           setJobs(data);
-          setHasActive(data.length > 0);
+          if (data.length > 0) {
+            setHasActive(true);
+            clearTimeout(hideTimer);
+          } else if (hasActive) {
+            hideTimer = setTimeout(() => setHasActive(false), 1500);
+          }
         }
       } catch {}
-      timer = setTimeout(poll, 2000);
+      timer = setTimeout(poll, 1000);
     };
 
     poll();
-    return () => clearTimeout(timer);
-  }, []);
+    return () => {
+      clearTimeout(timer);
+      clearTimeout(hideTimer);
+    };
+  }, [hasActive]);
 
   return { jobs, hasActive };
 }

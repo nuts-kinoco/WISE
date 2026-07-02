@@ -62,6 +62,8 @@ public class AdultWikiMetadataProvider : IMetadataProvider
 
             _logger.LogInformation("[AdultWiki] Fetch {Url}", detailUrl);
 
+            var candidates = ExtractUrlParameters(detailUrl);
+
             var req = new HttpRequestMessage(HttpMethod.Get, detailUrl);
             req.Headers.Add("User-Agent",
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
@@ -80,7 +82,8 @@ public class AdultWikiMetadataProvider : IMetadataProvider
             }
 
             var html = await response.Content.ReadAsStringAsync(context.CancellationToken);
-            var candidates = ParseHtml(html, detailUrl);
+            var htmlCandidates = ParseHtml(html, detailUrl);
+            candidates.AddRange(htmlCandidates);
 
             if (candidates.Count == 0)
                 return MetadataResult.Failed(ProviderId, FailureReason.ParserError,
@@ -268,13 +271,6 @@ public class AdultWikiMetadataProvider : IMetadataProvider
             if (!string.IsNullOrWhiteSpace(val))
                 results.Add(new MetadataCandidate(ProviderId, "Label", val, 60, Priority, SourceUrl: url));
         }
-        else if (key.Contains("シリーズ") && !results.Any(c => c.FieldName == "Series"))
-        {
-            var a = valueNode.SelectSingleNode(".//a");
-            var val = System.Net.WebUtility.HtmlDecode((a?.InnerText ?? rawValue).Trim());
-            if (!string.IsNullOrWhiteSpace(val))
-                results.Add(new MetadataCandidate(ProviderId, "Series", val, 60, Priority, SourceUrl: url));
-        }
         else if ((key.Contains("発売") || key.Contains("配信")) && !results.Any(c => c.FieldName == "ReleaseDate"))
         {
             var m = Regex.Match(rawValue, @"\d{4}[-/]\d{2}[-/]\d{2}");
@@ -324,6 +320,24 @@ public class AdultWikiMetadataProvider : IMetadataProvider
         {
             return null;
         }
+    }
+
+    // 詳細URLから actress パラメータを抽出（URL デコード済み）
+    private static List<MetadataCandidate> ExtractUrlParameters(string url)
+    {
+        var candidates = new List<MetadataCandidate>();
+        try
+        {
+            var uri = new Uri(url);
+            var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+            var actress = query["actress"];
+            if (!string.IsNullOrEmpty(actress))
+            {
+                candidates.Add(new MetadataCandidate("AdultWiki", "Actress", actress, 75, 30, SourceUrl: url));
+            }
+        }
+        catch { }
+        return candidates;
     }
 
     // RPIN-010 → rpin00010  |  ABW-123 → abw00123  |  SONE-001 → sone00001

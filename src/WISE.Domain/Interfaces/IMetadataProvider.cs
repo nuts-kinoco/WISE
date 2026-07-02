@@ -21,6 +21,13 @@ public interface IMetadataProvider
     IReadOnlySet<MediaType>? SupportedMediaTypes => null;
 
     /// <summary>
+    /// 識別子に対応するかどうかを返す。
+    /// false を返すと MetadataService がスキップする。
+    /// デフォルトは全識別子に対応。
+    /// </summary>
+    bool CanHandle(string identifier) => true;
+
+    /// <summary>
     /// Metadataを取得します。
     /// 失敗時も例外をスローせず MetadataResult.Failed(...) を返します。
     /// </summary>

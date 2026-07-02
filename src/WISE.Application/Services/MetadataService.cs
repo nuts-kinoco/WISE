@@ -20,75 +20,112 @@ public class MetadataService
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    // Tier1 必須フィールドは MediaType ごとに異なる。
-    // Comic/Book は Actress/Maker ではなく Author/Circle が本質。
-    private static string[] GetTier1ExitFields(MediaType mediaType) => mediaType switch
+    private static string[] GetExitFields(MediaType mediaType) => mediaType switch
     {
-        MediaType.Comic    => ["Title", "Author", "Circle"],
-        MediaType.Book     => ["Title", "Author"],
-        _                  => ["Title", "Actress", "Maker"],  // Video / PhotoBook
+        MediaType.Comic => ["Title", "Author", "Circle"],
+        MediaType.Book  => ["Title", "Author"],
+        _               => ["Title", "Actress", "Maker"],
     };
+
+    private static readonly string[] CoverFields = ["PortraitCover", "LandscapeCover"];
 
     public async Task<IEnumerable<MetadataResult>> CollectResultsAsync(MetadataProviderContext context)
     {
         _logger.LogInformation("[WISE.Metadata] Scan Started: {Identifier} MediaType={MediaType}",
             context.Identifier, context.MediaType);
 
-        // MediaType に対応しないプロバイダーを事前に除外
-        var eligible = _providers
+        var groups = _providers
             .Where(p => p.SupportedMediaTypes == null || p.SupportedMediaTypes.Contains(context.MediaType))
-            .OrderByDescending(p => p.Priority)
+            .Where(p => p.CanHandle(context.Identifier))
+            .GroupBy(p => p.Priority)
+            .OrderByDescending(g => g.Key)
             .ToList();
 
-        // Tier1: 公式一次ソース (Priority≥80)
-        var tier1 = eligible.Where(p => p.Priority >= 80).ToList();
-        // Tier2+: 補完ソース (Priority<80)
-        var tier2 = eligible.Where(p => p.Priority < 80).ToList();
-
         var allResults = new List<MetadataResult>();
-        var tier1ExitFields = GetTier1ExitFields(context.MediaType);
+        var exitFields = GetExitFields(context.MediaType);
+        bool textSatisfied = false;
+        int textSatisfiedAtIndex = groups.Count; // 早期終了した位置
 
-        // --- Step1: Tier1 を並列実行 ---
-        if (tier1.Count > 0)
+        // --- Phase 1: テキスト系フィールド収集（Priority グループ単位、早期終了あり）---
+        for (int i = 0; i < groups.Count; i++)
         {
-            _logger.LogInformation("[WISE.Metadata] Running {Count} Tier1 providers: {Names}",
-                tier1.Count, string.Join(", ", tier1.Select(p => p.ProviderId)));
+            var group = groups[i];
+            var providers = group.ToList();
+            _logger.LogInformation(
+                "[WISE.Metadata] Running Priority={Priority} group ({Count} providers): {Names}",
+                group.Key, providers.Count, string.Join(", ", providers.Select(p => p.ProviderId)));
 
-            var tier1Results = await Task.WhenAll(tier1.Select(p => SafeFetchAsync(p, context)));
-            allResults.AddRange(tier1Results);
-            LogFailures(tier1Results);
+            var groupResults = await Task.WhenAll(providers.Select(p => SafeFetchAsync(p, context)));
+            allResults.AddRange(groupResults);
+            LogFailures(groupResults);
 
-            // 早期終了チェック: Tier1で必須フィールドが全て揃っていれば下位をスキップ
-            var coveredFields = tier1Results
+            var covered = allResults
                 .Where(r => r.Success)
                 .SelectMany(r => r.Candidates)
                 .Select(c => c.FieldName)
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-            var missing = tier1ExitFields.Where(f => !coveredFields.Contains(f)).ToArray();
-
-            if (missing.Length == 0)
+            var missing = exitFields.Where(f => !covered.Contains(f)).ToArray();
+            if (missing.Length == 0 && !textSatisfied)
             {
+                textSatisfied = true;
+                textSatisfiedAtIndex = i;
                 _logger.LogInformation(
-                    "[WISE.Metadata] Tier1 satisfied all primary fields ({Fields}). Skipping {Count} lower-priority providers.",
-                    string.Join(", ", tier1ExitFields), tier2.Count);
-                return allResults;
+                    "[WISE.Metadata] Text fields satisfied at Priority={Priority}. Checking cover candidates.",
+                    group.Key);
+                break;
             }
 
-            _logger.LogInformation(
-                "[WISE.Metadata] Tier1 incomplete. Missing: [{Missing}]. Proceeding to Tier2+ ({Count} providers).",
-                string.Join(", ", missing), tier2.Count);
+            if (missing.Length > 0)
+                _logger.LogInformation(
+                    "[WISE.Metadata] Missing after Priority={Priority}: [{Missing}]",
+                    group.Key, string.Join(", ", missing));
         }
 
-        // --- Step2: Tier2+ を並列実行 ---
-        if (tier2.Count > 0)
+        // --- Phase 2: カバー専用フォールバック（テキスト早期終了した続きのグループのみ）---
+        // テキストは揃っているが、未実行グループのカバーを掘り下げる
+        if (textSatisfied)
         {
-            _logger.LogInformation("[WISE.Metadata] Running {Count} Tier2+ providers: {Names}",
-                tier2.Count, string.Join(", ", tier2.Select(p => p.ProviderId)));
+            var hasCover = allResults
+                .Where(r => r.Success)
+                .SelectMany(r => r.Candidates)
+                .Any(c => CoverFields.Contains(c.FieldName));
 
-            var tier2Results = await Task.WhenAll(tier2.Select(p => SafeFetchAsync(p, context)));
-            allResults.AddRange(tier2Results);
-            LogFailures(tier2Results);
+            if (!hasCover)
+                _logger.LogInformation("[WISE.Metadata] No cover candidate yet. Running cover fallback pass.");
+
+            // テキスト早期終了以降の未実行グループをカバー目的で走らせる
+            for (int i = textSatisfiedAtIndex + 1; i < groups.Count; i++)
+            {
+                var group = groups[i];
+                var providers = group.ToList();
+                _logger.LogInformation(
+                    "[WISE.Metadata] [CoverFallback] Priority={Priority} group ({Count} providers): {Names}",
+                    group.Key, providers.Count, string.Join(", ", providers.Select(p => p.ProviderId)));
+
+                var groupResults = await Task.WhenAll(providers.Select(p => SafeFetchAsync(p, context)));
+                allResults.AddRange(groupResults);
+                LogFailures(groupResults);
+
+                // カバー候補が見つかったら終了
+                var coverCandidates = groupResults
+                    .Where(r => r.Success)
+                    .SelectMany(r => r.Candidates)
+                    .Where(c => CoverFields.Contains(c.FieldName))
+                    .ToList();
+
+                if (coverCandidates.Count > 0)
+                {
+                    _logger.LogInformation(
+                        "[WISE.Metadata] [CoverFallback] Cover found at Priority={Priority}. Stopping fallback.",
+                        group.Key);
+                    break;
+                }
+            }
+        }
+        else
+        {
+            // テキスト早期終了しなかった場合 (全グループ実行済み) は追加アクション不要
         }
 
         return allResults;
