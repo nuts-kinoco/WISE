@@ -34,6 +34,10 @@ public class Fc2AltMetadataProvider : IMetadataProvider
     public int Priority => 55;
     public IReadOnlySet<MediaType>? SupportedMediaTypes => new HashSet<MediaType> { MediaType.Video };
 
+    // Fc2MetadataProvider と同様、早期終了判定では Title のみを確実供給とみなす。
+    public IReadOnlySet<string>? ProvidableFields { get; } =
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Title" };
+
     private static readonly string[] BrowserUserAgent = [
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
     ];

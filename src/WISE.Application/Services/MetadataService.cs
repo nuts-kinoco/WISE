@@ -20,18 +20,41 @@ public class MetadataService
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    private static string[] GetExitFields(MediaType mediaType, string identifier)
-    {
-        if (mediaType == MediaType.Comic) return ["Title", "Author", "Circle"];
-        if (mediaType == MediaType.Book) return ["Title", "Author"];
-
-        // Video specific logic based on identifier
-        if (!string.IsNullOrEmpty(identifier) && identifier.StartsWith("FC2", StringComparison.OrdinalIgnoreCase))
+    // MediaType ごとに「揃えば早期終了してよい」テキストフィールド（＝望ましいフィールド集合）。
+    // これは分岐ロジックではなくデータ設定であり、識別子文字列による分岐を含まない。
+    // FC2 等の個別事情は Provider 側の ProvidableFields 宣言で吸収する（下記 GetExitFields 参照）。
+    // TODO(P1/将来): 究極的には MediaDisplayProfile 側の設定に寄せる余地がある。
+    private static readonly IReadOnlyDictionary<MediaType, string[]> DesiredFieldsByMediaType =
+        new Dictionary<MediaType, string[]>
         {
-            return ["Title"]; // FC2 usually lacks Maker/Actress structurally
-        }
+            [MediaType.Comic] = ["Title", "Author", "Circle"],
+            [MediaType.Book] = ["Title", "Author"],
+        };
 
-        return ["Title", "Actress", "Maker"];
+    private static string[] GetDesiredFields(MediaType mediaType)
+        => DesiredFieldsByMediaType.TryGetValue(mediaType, out var fields)
+            ? fields
+            : ["Title", "Actress", "Maker"]; // 既定（Video 等）
+
+    /// <summary>
+    /// 「取得を待つ意味のある」フィールド集合を算出する。
+    /// 望ましいフィールドのうち、これまでに成功した Provider のいずれかが構造的に供給しうるものだけを対象とする。
+    /// ProvidableFields が null の Provider は「全フィールド供給可能」とみなす。
+    /// 例: FC2 では実際に成功するのは Fc2/Fc2Alt のみで、両者は Title のみを供給可能と宣言するため、
+    ///     Actress/Maker は「誰も供給できない」と判定され早期終了を妨げない（識別子文字列の分岐は不要）。
+    /// </summary>
+    private static string[] GetExitFields(
+        string[] desiredFields,
+        IEnumerable<IMetadataProvider> succeededProviders)
+    {
+        var providable = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var p in succeededProviders)
+        {
+            if (p.ProvidableFields == null)
+                return desiredFields; // 制約なしの Provider が1つでも成功していれば全 desired を要求
+            foreach (var f in p.ProvidableFields) providable.Add(f);
+        }
+        return desiredFields.Where(providable.Contains).ToArray();
     }
 
     private static readonly string[] CoverFields = ["PortraitCover", "LandscapeCover"];
@@ -41,15 +64,23 @@ public class MetadataService
         _logger.LogInformation("[WISE.Metadata] Scan Started: {Identifier} MediaType={MediaType}",
             context.Identifier, context.MediaType);
 
-        var groups = _providers
+        var eligibleProviders = _providers
             .Where(p => p.SupportedMediaTypes == null || p.SupportedMediaTypes.Contains(context.MediaType))
             .Where(p => p.CanHandle(context.Identifier))
+            .ToList();
+
+        var groups = eligibleProviders
             .GroupBy(p => p.Priority)
             .OrderByDescending(g => g.Key)
             .ToList();
 
+        // 成功した MetadataResult（ProviderName に ProviderId が入る）から Provider を引くための対応表
+        var providerById = eligibleProviders
+            .GroupBy(p => p.ProviderId)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+
         var allResults = new List<MetadataResult>();
-        var exitFields = GetExitFields(context.MediaType, context.Identifier);
+        var desiredFields = GetDesiredFields(context.MediaType);
         bool textSatisfied = false;
         int textSatisfiedAtIndex = groups.Count; // 早期終了した位置
 
@@ -66,14 +97,24 @@ public class MetadataService
             allResults.AddRange(groupResults);
             LogFailures(groupResults);
 
-            var covered = allResults
-                .Where(r => r.Success)
+            var succeeded = allResults.Where(r => r.Success).ToList();
+
+            var covered = succeeded
                 .SelectMany(r => r.Candidates)
                 .Select(c => c.FieldName)
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
+            // これまで成功した Provider が構造的に供給しうるフィールドだけを終了条件とする
+            var succeededProviders = succeeded
+                .Select(r => providerById.TryGetValue(r.ProviderName, out var p) ? p : null)
+                .Where(p => p != null)
+                .Select(p => p!);
+            var exitFields = GetExitFields(desiredFields, succeededProviders);
+
             var missing = exitFields.Where(f => !covered.Contains(f)).ToArray();
-            if (missing.Length == 0 && !textSatisfied)
+            // 成功 Provider が1つも無い段階では早期終了しない
+            // （exitFields が空集合になり「何も取得せず満足」と誤判定するのを防ぐ）
+            if (succeeded.Count > 0 && missing.Length == 0 && !textSatisfied)
             {
                 textSatisfied = true;
                 textSatisfiedAtIndex = i;

@@ -48,6 +48,12 @@ public class Fc2MetadataProvider : IMetadataProvider
     public bool CanHandle(string identifier) =>
         Regex.IsMatch(identifier, @"^FC2", RegexOptions.IgnoreCase);
 
+    // FC2 は構造的に女優(Actress)を持たず、販売者(Maker)も欠落しがち。
+    // 早期終了判定では Title のみを「確実に供給可能」と宣言する
+    // （Maker/Genre/ReleaseDate/Cover は取得できれば保存するが、揃うのを待たない）。
+    public IReadOnlySet<string>? ProvidableFields { get; } =
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Title" };
+
     private static readonly string[] NotFoundPhrases =
     {
         "申し訳ありません、お探しの商品が見つかりませんでした",
