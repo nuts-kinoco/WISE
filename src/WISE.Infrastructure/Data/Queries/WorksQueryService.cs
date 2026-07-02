@@ -18,6 +18,24 @@ public class WorksQueryService : IWorksQueryService
 
     public WorksQueryService(WiseDbContext db) => _db = db;
 
+    // P3是正(B-3): 一覧・関連作品はWorkItemMapper.Mapが実際に参照するフィールドのみで足りる。
+    // Genre/Tag/UserTag/SampleImage等、蔵書によっては1作品あたり数十件にもなる残りのフィールドを
+    // 一覧表示のためだけに毎回転送するのは無駄が大きいため、filtered Includeで絞り込む。
+    // WorkItemMapper.Map（表示用途）と GetListAsync の検索条件（q検索でGenre/Tagも対象）は
+    // 別物であることに注意：検索条件はSQL側の相関サブクエリで完結し、この絞り込みの影響を受けない。
+    private static readonly string[] ListDisplayFieldNames =
+    {
+        "Title", "ActressTag", "Actress", "actress", "Maker", "maker", "Label", "label",
+        "ReleaseDate", "release_date", "author", "Author", "Writer", "circle", "Circle",
+        "page_count", "PageCount", "language", "Language", "LanguageISO",
+        "PortraitCover", "Cover", "LandscapeCover", "CoverLandscape",
+    };
+
+    private static readonly AssetType[] ListDisplayAssetTypes =
+    {
+        AssetType.PortraitCover, AssetType.LandscapeCover,
+    };
+
     public async Task<(IReadOnlyList<Work> Works, int TotalCount)> GetListAsync(
         int page, int pageSize, string? q, string? status, string? mediaType, string? sort,
         CancellationToken ct = default)
@@ -27,8 +45,8 @@ public class WorksQueryService : IWorksQueryService
 
         var query = _db.Works
             .AsNoTracking()
-            .Include(w => w.MetadataFields)
-            .Include(w => w.Assets)
+            .Include(w => w.MetadataFields.Where(m => ListDisplayFieldNames.Contains(m.FieldName)))
+            .Include(w => w.Assets.Where(a => ListDisplayAssetTypes.Contains(a.AssetType)))
             .AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(status))
@@ -169,8 +187,8 @@ public class WorksQueryService : IWorksQueryService
 
         return await _db.Works
             .AsNoTracking()
-            .Include(w => w.MetadataFields)
-            .Include(w => w.Assets)
+            .Include(w => w.MetadataFields.Where(m => ListDisplayFieldNames.Contains(m.FieldName)))
+            .Include(w => w.Assets.Where(a => ListDisplayAssetTypes.Contains(a.AssetType)))
             .Where(w => w.Id != workId
                 && w.MetadataFields.Any(m => fieldNames.Contains(m.FieldName) && values.Contains(m.Value)))
             .OrderByDescending(w => w.CreatedAt)
