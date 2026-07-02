@@ -103,11 +103,17 @@ namespace WISE.Api.Controllers
                     using var ms = new MemoryStream();
                     await stream.CopyToAsync(ms, HttpContext.RequestAborted);
                     cachedBytes = ms.ToArray();
-                    _cache.Set(cacheKey, cachedBytes, new MemoryCacheEntryOptions
+
+                    // 1ページが極端に大きい場合はキャッシュしない（LOH断片化・メモリ圧迫を回避）
+                    const int MaxCacheablePageBytes = 20 * 1024 * 1024; // 20MB
+                    if (cachedBytes.Length <= MaxCacheablePageBytes)
                     {
-                        SlidingExpiration = TimeSpan.FromMinutes(30),
-                        Size = cachedBytes.Length,  // SizeLimit 集計に使用
-                    });
+                        _cache.Set(cacheKey, cachedBytes, new MemoryCacheEntryOptions
+                        {
+                            SlidingExpiration = TimeSpan.FromMinutes(30),
+                            Size = cachedBytes.Length,  // SizeLimit 集計に使用
+                        });
+                    }
                 }
 
                 return File(cachedBytes, contentType);

@@ -41,6 +41,9 @@ namespace WISE.Api.Controllers
             [FromQuery] string? mediaType = null,
             [FromQuery] string? sort = null)
         {
+            page = Math.Max(1, page);
+            pageSize = Math.Clamp(pageSize, 1, 100);
+
             var query = _dbContext.Works
                 .AsNoTracking()
                 .Include(w => w.MetadataFields)
@@ -661,6 +664,48 @@ namespace WISE.Api.Controllers
                 ? work.Assets.Select(a => a.FilePath).OfType<string>().ToList()
                 : new List<string>();
 
+            // 物理ファイル削除を DB 削除より先に試行する。
+            // ロック中のファイル等で削除に失敗した場合は DB を変更せず中断し、
+            // 呼び出し元がリトライできるようにする（孤立ファイル化を防ぐ）。
+            if (deleteFiles)
+            {
+                var lockedPaths = new List<string>();
+                foreach (var path in filePaths)
+                {
+                    if (path == null || !System.IO.File.Exists(path)) continue;
+                    try
+                    {
+                        System.IO.File.Delete(path);
+                    }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                    {
+                        _logger.LogWarning(ex, "[Delete] File locked or inaccessible: {Path}", path);
+                        lockedPaths.Add(path);
+                    }
+                }
+
+                if (lockedPaths.Count > 0)
+                {
+                    return Conflict(new
+                    {
+                        error = "一部のファイルが使用中のため削除できませんでした。ファイルを閉じてから再試行してください。",
+                        lockedFiles = lockedPaths,
+                    });
+                }
+
+                // 空になったフォルダを整理
+                foreach (var path in filePaths)
+                {
+                    if (path == null) continue;
+                    var dir = Path.GetDirectoryName(path);
+                    if (dir != null && Directory.Exists(dir) && !Directory.EnumerateFileSystemEntries(dir).Any())
+                    {
+                        try { Directory.Delete(dir); }
+                        catch (Exception ex) { _logger.LogWarning(ex, "[Delete] Failed to remove empty dir: {Dir}", dir); }
+                    }
+                }
+            }
+
             // DB から関連レコードをすべて削除
             var workTarget = $"Work_{workId}";
             var jobs = await _dbContext.Jobs.Where(j => j.Target == workTarget).ToListAsync();
@@ -673,32 +718,7 @@ namespace WISE.Api.Controllers
             await _dbContext.SaveChangesAsync();
             _logger.LogInformation("[Delete] Work {WorkId} ({Id}) deleted from DB.", workId, work.PrimaryIdentifier);
 
-            // 物理ファイル削除
-            if (deleteFiles)
-            {
-                int deleted = 0, failed = 0;
-                foreach (var path in filePaths)
-                {
-                    if (path == null) continue;
-                    try
-                    {
-                        if (System.IO.File.Exists(path)) { System.IO.File.Delete(path); deleted++; }
-                        // カバー画像等が入ったフォルダが空になったら削除
-                        var dir = Path.GetDirectoryName(path);
-                        if (dir != null && Directory.Exists(dir) && !Directory.EnumerateFileSystemEntries(dir).Any())
-                            Directory.Delete(dir);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex, "[Delete] Failed to delete file: {Path}", path);
-                        failed++;
-                    }
-                }
-                _logger.LogInformation("[Delete] Files: {Deleted} deleted, {Failed} failed.", deleted, failed);
-                return Ok(new { deleted = true, filesDeleted = deleted, filesFailed = failed });
-            }
-
-            return Ok(new { deleted = true });
+            return Ok(new { deleted = true, filesDeleted = filePaths.Count });
         }
 
         [HttpGet("{id}/cover")]
