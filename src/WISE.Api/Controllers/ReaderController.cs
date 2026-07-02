@@ -1,14 +1,13 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using System;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using WISE.Application.Queries;
 using WISE.Domain.Enums;
 using WISE.Infrastructure.Archive;
-using WISE.Infrastructure.Data;
 
 namespace WISE.Api.Controllers
 {
@@ -16,14 +15,14 @@ namespace WISE.Api.Controllers
     [Route("api/works/{id}/reader")]
     public class ReaderController : ControllerBase
     {
-        private readonly WiseDbContext _db;
+        private readonly IReaderQueryService _query;
         private readonly ArchiveReaderSelector _selector;
         private readonly ILogger<ReaderController> _logger;
         private readonly IMemoryCache _cache;
 
-        public ReaderController(WiseDbContext db, ArchiveReaderSelector selector, ILogger<ReaderController> logger, IMemoryCache cache)
+        public ReaderController(IReaderQueryService query, ArchiveReaderSelector selector, ILogger<ReaderController> logger, IMemoryCache cache)
         {
-            _db = db;
+            _query = query;
             _selector = selector;
             _logger = logger;
             _cache = cache;
@@ -34,11 +33,7 @@ namespace WISE.Api.Controllers
         {
             if (!Guid.TryParse(id, out var workId)) return BadRequest("Invalid Work ID.");
 
-            var work = await _db.Works
-                .Include(w => w.Assets)
-                .AsNoTracking()
-                .FirstOrDefaultAsync(w => w.Id == workId);
-
+            var work = await _query.GetWorkWithAssetsAsync(workId, HttpContext.RequestAborted);
             if (work == null) return NotFound();
 
             var archiveAsset = SelectArchiveAsset(work.Assets);
@@ -75,11 +70,7 @@ namespace WISE.Api.Controllers
         {
             if (!Guid.TryParse(id, out var workId)) return BadRequest("Invalid Work ID.");
 
-            var work = await _db.Works
-                .Include(w => w.Assets)
-                .AsNoTracking()
-                .FirstOrDefaultAsync(w => w.Id == workId);
-
+            var work = await _query.GetWorkWithAssetsAsync(workId, HttpContext.RequestAborted);
             if (work == null) return NotFound();
 
             var archiveAsset = SelectArchiveAsset(work.Assets);

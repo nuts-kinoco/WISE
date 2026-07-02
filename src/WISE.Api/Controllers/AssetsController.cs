@@ -1,8 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using System.IO;
 using System.Threading.Tasks;
-using WISE.Infrastructure.Data;
+using WISE.Application.Queries;
 using WISE.Infrastructure.Services;
 
 namespace WISE.Api.Controllers
@@ -11,12 +10,12 @@ namespace WISE.Api.Controllers
     [Route("api/[controller]")]
     public class AssetsController : ControllerBase
     {
-        private readonly WiseDbContext _dbContext;
+        private readonly IAssetsQueryService _query;
         private readonly VideoStreamCache _videoCache;
 
-        public AssetsController(WiseDbContext dbContext, VideoStreamCache videoCache)
+        public AssetsController(IAssetsQueryService query, VideoStreamCache videoCache)
         {
-            _dbContext = dbContext;
+            _query = query;
             _videoCache = videoCache;
         }
 
@@ -26,9 +25,7 @@ namespace WISE.Api.Controllers
             if (!System.Guid.TryParse(id, out var assetId))
                 return BadRequest("Invalid Asset ID format.");
 
-            var asset = await _dbContext.Assets
-                .AsNoTracking()
-                .FirstOrDefaultAsync(a => a.Id == assetId);
+            var asset = await _query.GetByIdAsync(assetId, HttpContext.RequestAborted);
 
             if (asset == null)
                 return NotFound();

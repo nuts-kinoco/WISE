@@ -177,6 +177,10 @@ builder.Services.AddScoped<WISE.Application.Queries.IHistoryQueryService, WISE.I
 builder.Services.AddScoped<WISE.Application.Queries.IHomeQueryService, WISE.Infrastructure.Data.Queries.HomeQueryService>();
 builder.Services.AddScoped<WISE.Api.UseCases.WatchFolderUseCase>();
 builder.Services.AddScoped<IAppSettingsRepository, WISE.Infrastructure.Data.Repositories.AppSettingsRepository>();
+builder.Services.AddScoped<WISE.Application.Queries.ICollectionsQueryService, WISE.Infrastructure.Data.Queries.CollectionsQueryService>();
+builder.Services.AddScoped<WISE.Api.UseCases.CollectionUseCase>();
+builder.Services.AddScoped<WISE.Application.Queries.IReaderQueryService, WISE.Infrastructure.Data.Queries.ReaderQueryService>();
+builder.Services.AddScoped<WISE.Application.Queries.IAssetsQueryService, WISE.Infrastructure.Data.Queries.AssetsQueryService>();
 
 // Archive readers
 builder.Services.AddScoped<IArchiveReader, ZipArchiveReader>();
